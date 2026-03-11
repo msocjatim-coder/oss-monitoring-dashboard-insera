@@ -101,12 +101,20 @@ def save_to_sheet(df):
         # Bersihkan sheet
         sheet.clear()
         
-        # Siapkan data untuk diupdate
-        # Ambil header
-        headers = df.columns.tolist()
+        # Buat salinan dataframe untuk diproses
+        df_to_save = df.copy()
         
-        # Ambil nilai (isi NaN dengan string kosong)
-        values = df.fillna("").values.tolist()
+        # Konversi semua kolom datetime ke string
+        for col in df_to_save.columns:
+            if pd.api.types.is_datetime64_any_dtype(df_to_save[col]):
+                df_to_save[col] = df_to_save[col].dt.strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Konversi semua kolom ke string untuk keamanan
+        df_to_save = df_to_save.astype(str)
+        
+        # Siapkan data untuk diupdate
+        headers = df_to_save.columns.tolist()
+        values = df_to_save.values.tolist()
         
         # Gabungkan header dan values
         all_data = [headers] + values
@@ -396,4 +404,5 @@ with col2:
 # FOOTER
 # ============================================================
 st.markdown("---")
+
 st.caption(f"🔄 Auto-refresh setiap 5 menit. Update terakhir: {datetime.now().strftime('%H:%M:%S')}")
