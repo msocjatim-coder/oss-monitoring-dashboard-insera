@@ -75,6 +75,10 @@ def save_to_supabase(df):
         return False
     
     try:
+        # TAMPILKAN INFORMASI KOLOM UNTUK DEBUG
+        st.write("📋 **Kolom yang akan dikirim ke Supabase:**")
+        st.write(list(df.columns))
+        
         # Konversi dataframe ke records
         records = df.to_dict('records')
         
@@ -89,6 +93,7 @@ def save_to_supabase(df):
         # Upsert ke database berdasarkan INCIDENT
         response = supabase.table('oss_data').upsert(records, on_conflict='INCIDENT').execute()
         
+        st.success("✅ Data berhasil dikirim ke Supabase!")
         return True
         
     except Exception as e:
@@ -118,6 +123,12 @@ def process_data(df):
     Menambahkan kolom-kolom analisis untuk dashboard
     """
     df = df.copy()
+    
+    # HAPUS KOLOM Unnamed (kolom indeks dari CSV)
+    unnamed_cols = [col for col in df.columns if 'Unnamed' in col or col == '']
+    if unnamed_cols:
+        df = df.drop(columns=unnamed_cols)
+        st.write(f"Menghapus kolom: {unnamed_cols}")
     
     # Bersihkan nama kolom dari karakter aneh
     df.columns = (
@@ -404,3 +415,4 @@ with col2:
 # ============================================================
 st.markdown("---")
 st.caption(f"🔄 Auto-refresh setiap 5 menit. Update terakhir: {datetime.now().strftime('%H:%M:%S')}")
+
