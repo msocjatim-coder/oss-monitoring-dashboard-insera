@@ -78,6 +78,7 @@ def save_to_supabase(df):
         # TAMPILKAN INFORMASI KOLOM UNTUK DEBUG
         st.write("📋 **Kolom yang akan dikirim ke Supabase:**")
         st.write(list(df.columns))
+        st.write(f"**Jumlah baris:** {len(df)}")
         
         # Konversi dataframe ke records
         records = df.to_dict('records')
@@ -93,7 +94,7 @@ def save_to_supabase(df):
         # Upsert ke database berdasarkan INCIDENT
         response = supabase.table('oss_data').upsert(records, on_conflict='INCIDENT').execute()
         
-        st.success("✅ Data berhasil dikirim ke Supabase!")
+        st.success(f"✅ Berhasil mengirim {len(records)} tiket ke Supabase!")
         return True
         
     except Exception as e:
@@ -136,6 +137,17 @@ def process_data(df):
         .str.strip()
         .str.replace('"', '', regex=False)
     )
+    
+    # CEK DUPLIKAT INCIDENT
+    if "INCIDENT" in df.columns:
+        duplikat = df[df.duplicated(subset=["INCIDENT"], keep=False)]
+        if not duplikat.empty:
+            st.warning(f"⚠️ Ditemukan {len(duplikat)} baris dengan INCIDENT duplikat!")
+            st.dataframe(duplikat[["INCIDENT", "SUMMARY"]].head())
+            
+            # Hanya ambil yang pertama untuk setiap INCIDENT
+            df = df.drop_duplicates(subset=["INCIDENT"], keep="first")
+            st.info(f"✅ Mengambil data pertama untuk setiap INCIDENT, total {len(df)} tiket unik")
     
     # Konversi kolom datetime
     date_columns = ["REPORTED DATE", "STATUS DATE", "DATEMODIFIED", "LAST UPDATE WORKLOG", "RESOLVE DATE"]
@@ -415,4 +427,5 @@ with col2:
 # ============================================================
 st.markdown("---")
 st.caption(f"🔄 Auto-refresh setiap 5 menit. Update terakhir: {datetime.now().strftime('%H:%M:%S')}")
+
 
