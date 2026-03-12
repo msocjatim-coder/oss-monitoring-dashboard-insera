@@ -1,5 +1,4 @@
 streamlit
 pandas
-gspread
-oauth2client
 streamlit-autorefresh
+supabase
