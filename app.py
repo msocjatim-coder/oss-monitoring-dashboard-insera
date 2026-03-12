@@ -170,7 +170,7 @@ def process_data(df):
     else:
         df["IS_ACTIVE"] = True
     
-    # Mapping nama kolom dari CSV ke database
+        # Mapping nama kolom dari CSV ke database (perhatikan: database pakai lowercase tanpa spasi)
     kolom_mapping = {
         "INCIDENT": "incident",
         "STATUS": "status",
@@ -189,7 +189,7 @@ def process_data(df):
         "CONTACT PHONE": "contact_phone",
         "CONTACT NAME": "contact_name",
         "CONTACT EMAIL": "contact_email",
-        "BOOKING DATE": "booking_date",
+        "BOOKING DATE": "booking_date",  # <- INI YANG DIPERBAIKI (tanpa spasi, lowercase)
         "DESCRIPTION ASSIGMENT": "description_assigment",
         "REPORTED PRIORITY": "reported_priority",
         "SOURCE TICKET": "source_ticket",
@@ -258,7 +258,6 @@ def process_data(df):
         "UMUR_TIKET_HARI": "umur_tiket_hari",
         "IS_ACTIVE": "is_active"
     }
-    
     # Buat kolom baru sesuai mapping
     for old_col, new_col in kolom_mapping.items():
         if old_col in df.columns:
@@ -542,4 +541,5 @@ with col2:
 # ============================================================
 st.markdown("---")
 st.caption(f"🔄 Auto-refresh setiap 5 menit. Update terakhir: {datetime.now().strftime('%H:%M:%S')}")
+
 
