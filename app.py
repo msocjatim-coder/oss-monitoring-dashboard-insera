@@ -38,35 +38,40 @@ def init_supabase():
         return None
 
 # ============================================================
-# FUNGSI MEMBACA DATA DARI SUPABASE
+# FUNGSI MEMBACA DATA DARI SUPABASE (TANPA CACHE)
 # ============================================================
-# Ganti dari:
-@st.cache_data(ttl=300)
 def load_data_from_supabase():
-    ...
-
-# Menjadi:
-# @st.cache_data(ttl=300)  # Dimatikan sementara
-def load_data_from_supabase():
-    ...
+    """Membaca semua data dari tabel oss_data"""
+    supabase = init_supabase()
+    if supabase is None:
+        return pd.DataFrame()
+    
+    try:
+        response = supabase.table('oss_data').select('*').execute()
+        df = pd.DataFrame(response.data)
+        
+        # Hapus kolom internal
+        if 'id' in df.columns:
+            df = df.drop(columns=['id'])
+        if 'created_at' in df.columns:
+            df = df.drop(columns=['created_at'])
+            
+        return df
+        
+    except Exception as e:
+        st.error(f"Gagal baca data: {str(e)}")
+        return pd.DataFrame()
 
 # ============================================================
 # FUNGSI MENYIMPAN DATA KE SUPABASE
 # ============================================================
 def save_to_supabase(df):
-    """
-    Menyimpan DataFrame langsung ke Supabase
-    """
+    """Menyimpan DataFrame ke Supabase"""
     supabase = init_supabase()
     if supabase is None:
         return False
     
     try:
-        # TAMPILKAN INFORMASI KOLOM UNTUK DEBUG
-        st.write("📋 **Kolom yang akan dikirim ke Supabase:**")
-        st.write(list(df.columns))
-        st.write(f"**Jumlah baris:** {len(df)}")
-        
         # Konversi dataframe ke records
         records = df.to_dict('records')
         
@@ -79,9 +84,7 @@ def save_to_supabase(df):
                     record[key] = value.isoformat() if pd.notna(value) else None
         
         # Upsert ke database berdasarkan INCIDENT
-        response = supabase.table('oss_data').upsert(records, on_conflict='INCIDENT').execute()
-        
-        st.success(f"✅ Berhasil mengirim {len(records)} tiket ke Supabase!")
+        supabase.table('oss_data').upsert(records, on_conflict='INCIDENT').execute()
         return True
         
     except Exception as e:
@@ -92,9 +95,7 @@ def save_to_supabase(df):
 # FUNGSI VALIDASI CSV
 # ============================================================
 def validate_csv(df):
-    """
-    Memeriksa apakah CSV memiliki kolom yang diperlukan
-    """
+    """Memeriksa apakah CSV memiliki kolom yang diperlukan"""
     required_columns = ["INCIDENT", "STATUS", "WITEL", "REPORTED DATE", "SUMMARY"]
     missing = [col for col in required_columns if col not in df.columns]
     
@@ -107,16 +108,13 @@ def validate_csv(df):
 # FUNGSI MEMPROSES DATA
 # ============================================================
 def process_data(df):
-    """
-    Menambahkan kolom-kolom analisis untuk dashboard
-    """
+    """Membersihkan data dan menambah kolom analisis"""
     df = df.copy()
     
     # HAPUS KOLOM Unnamed (kolom indeks dari CSV)
     unnamed_cols = [col for col in df.columns if 'Unnamed' in col or col == '']
     if unnamed_cols:
         df = df.drop(columns=unnamed_cols)
-        st.write(f"Menghapus kolom: {unnamed_cols}")
     
     # Bersihkan nama kolom dari karakter aneh
     df.columns = (
@@ -127,14 +125,7 @@ def process_data(df):
     
     # CEK DUPLIKAT INCIDENT
     if "INCIDENT" in df.columns:
-        duplikat = df[df.duplicated(subset=["INCIDENT"], keep=False)]
-        if not duplikat.empty:
-            st.warning(f"⚠️ Ditemukan {len(duplikat)} baris dengan INCIDENT duplikat!")
-            st.dataframe(duplikat[["INCIDENT", "SUMMARY"]].head())
-            
-            # Hanya ambil yang pertama untuk setiap INCIDENT
-            df = df.drop_duplicates(subset=["INCIDENT"], keep="first")
-            st.info(f"✅ Mengambil data pertama untuk setiap INCIDENT, total {len(df)} tiket unik")
+        df = df.drop_duplicates(subset=["INCIDENT"], keep="first")
     
     # Konversi kolom datetime
     date_columns = ["REPORTED DATE", "STATUS DATE", "DATEMODIFIED", "LAST UPDATE WORKLOG", "RESOLVE DATE"]
@@ -175,14 +166,18 @@ def process_data(df):
 # TAMPILAN UTAMA DASHBOARD
 # ============================================================
 
-# Header dan Upload
-col1, col2 = st.columns([8, 2])
+# Header dengan tombol refresh
+col1, col2, col3 = st.columns([8, 1, 2])
 
 with col1:
     st.title("📊 OSS Monitoring Dashboard")
     st.caption("Data tersimpan otomatis di Supabase")
 
 with col2:
+    if st.button("🔄 Refresh"):
+        st.rerun()
+
+with col3:
     uploaded_files = st.file_uploader(
         "Upload CSV",
         type=["csv"],
@@ -205,13 +200,6 @@ if uploaded_files:
                 # Fallback ke latin1
                 df_temp = pd.read_csv(uploaded_file, encoding="latin1")
             
-            # Bersihkan nama kolom
-            df_temp.columns = (
-                df_temp.columns
-                .str.strip()
-                .str.replace('"', '', regex=False)
-            )
-            
             all_dfs.append(df_temp)
         
         # Gabungkan semua file
@@ -222,14 +210,13 @@ if uploaded_files:
             is_valid, msg = validate_csv(df_upload)
             
             if is_valid:
-                # Proses data (tambah kolom LAYANAN, UMUR, IS_ACTIVE)
+                # Proses data
                 df_upload = process_data(df_upload)
                 
                 # Simpan ke Supabase
                 if save_to_supabase(df_upload):
                     st.success(f"✅ Berhasil upload {len(df_upload)} tiket!")
                     st.balloons()
-                    st.cache_data.clear()
                     st.rerun()
                 else:
                     st.error("❌ Gagal menyimpan ke Supabase")
@@ -239,13 +226,22 @@ if uploaded_files:
 # ============================================================
 # LOAD DATA DARI SUPABASE
 # ============================================================
+df_db = pd.DataFrame()  # Inisialisasi kosong
+
 with st.spinner("Memuat data..."):
-    df_db = load_data_from_supabase()
+    try:
+        df_db = load_data_from_supabase()
+    except Exception as e:
+        st.error(f"Error: {str(e)}")
 
 # Jika tidak ada data
 if df_db.empty:
-    st.warning("Belum ada data. Silakan upload CSV terlebih dahulu.")
-    st.stop()
+    st.warning("⚠️ Belum ada data. Silakan upload CSV terlebih dahulu.")
+    st.info("📤 Klik tombol 'Browse files' di pojok kanan atas untuk upload")
+    st.stop()  # Hentikan eksekusi di sini
+
+# Kalau ada data, lanjutkan
+st.success(f"✅ Menampilkan {len(df_db)} tiket")
 
 # ============================================================
 # SIAPKAN DATA UNTUK DITAMPILKAN
@@ -262,48 +258,30 @@ col1, col2, col3, col4 = st.columns(4)
 with col1:
     total_tiket = len(df_display)
     aktif = len(df_display[df_display["IS_ACTIVE"] == True]) if "IS_ACTIVE" in df_display.columns else 0
-    st.metric(
-        label="📋 TOTAL TIKET",
-        value=f"{total_tiket}",
-        delta=f"{aktif} aktif"
-    )
+    st.metric("📋 TOTAL TIKET", f"{total_tiket}", f"{aktif} aktif")
 
 with col2:
     if "LAYANAN" in df_display.columns:
         tsel = len(df_display[df_display["LAYANAN"] == "TSEL"])
         olo = len(df_display[df_display["LAYANAN"] == "OLO"])
+        st.metric("📊 LAYANAN", f"{tsel} TSEL", f"{olo} OLO")
     else:
-        tsel = olo = 0
-    st.metric(
-        label="📊 BERDASARKAN LAYANAN",
-        value=f"{tsel} TSEL",
-        delta=f"{olo} OLO"
-    )
+        st.metric("📊 LAYANAN", "N/A")
 
 with col3:
     if "UMUR_TIKET_HARI" in df_display.columns:
         umur_rata = df_display["UMUR_TIKET_HARI"].mean()
-        if pd.notna(umur_rata):
-            st.metric(
-                label="⏳ UMUR RATA-RATA",
-                value=f"{umur_rata:.1f} hari"
-            )
-        else:
-            st.metric(label="⏳ UMUR RATA-RATA", value="N/A")
+        st.metric("⏳ RATA-RATA UMUR", f"{umur_rata:.1f} hari")
     else:
-        st.metric(label="⏳ UMUR RATA-RATA", value="N/A")
+        st.metric("⏳ RATA-RATA UMUR", "N/A")
 
 with col4:
     if "STATUS" in df_display.columns:
         status_counts = df_display["STATUS"].value_counts()
         top_status = status_counts.index[0] if not status_counts.empty else "-"
-        st.metric(
-            label="⚡ STATUS TERBANYAK",
-            value=f"{top_status}",
-            delta=f"{status_counts.iloc[0] if not status_counts.empty else 0} tiket"
-        )
+        st.metric("⚡ STATUS TERBANYAK", top_status, f"{status_counts.iloc[0]} tiket")
     else:
-        st.metric(label="⚡ STATUS TERBANYAK", value="-")
+        st.metric("⚡ STATUS TERBANYAK", "-")
 
 st.markdown("---")
 
@@ -357,7 +335,6 @@ st.subheader(f"📋 Data Tiket ({len(df_filtered)} dari {len(df_display)})")
 kolom_tampil = ["INCIDENT", "STATUS", "WITEL", "REPORTED DATE", "SUMMARY", "LAYANAN", "UMUR_TIKET_HARI"]
 kolom_tampil = [k for k in kolom_tampil if k in df_filtered.columns]
 
-# Tampilkan dataframe
 st.dataframe(
     df_filtered[kolom_tampil],
     use_container_width=True,
@@ -390,9 +367,9 @@ col1, col2 = st.columns(2)
 with col1:
     csv_all = df_display.to_csv(index=False).encode("utf-8")
     st.download_button(
-        label="📥 Download Semua Data (CSV)",
+        label="📥 Download Semua Data",
         data=csv_all,
-        file_name=f"oss_all_data_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+        file_name=f"oss_data_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
         mime="text/csv",
         use_container_width=True
     )
@@ -402,9 +379,9 @@ with col2:
         df_aktif = df_display[df_display["IS_ACTIVE"] == True].copy()
         csv_active = df_aktif.to_csv(index=False).encode("utf-8")
         st.download_button(
-            label="📥 Download Data Aktif (CSV)",
+            label="📥 Download Data Aktif",
             data=csv_active,
-            file_name=f"oss_active_data_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            file_name=f"oss_active_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
             mime="text/csv",
             use_container_width=True
         )
@@ -413,7 +390,4 @@ with col2:
 # FOOTER
 # ============================================================
 st.markdown("---")
-st.caption(f"🔄 Auto-refresh setiap 5 menit. Update terakhir: {datetime.now().strftime('%H:%M:%S')}")
-
-
-
+st.caption(f"🔄 Update terakhir: {datetime.now().strftime('%H:%M:%S')}")
