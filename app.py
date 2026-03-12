@@ -40,8 +40,9 @@ def init_supabase():
 # ============================================================
 # FUNGSI MEMBACA DATA DARI SUPABASE (TANPA CACHE)
 # ============================================================
+# Hapus dekorator @st.cache_data - gunakan ini:
 def load_data_from_supabase():
-    """Membaca semua data dari tabel oss_data"""
+    """Membaca semua data dari tabel oss_data - tanpa cache"""
     supabase = init_supabase()
     if supabase is None:
         return pd.DataFrame()
@@ -61,7 +62,6 @@ def load_data_from_supabase():
     except Exception as e:
         st.error(f"Gagal baca data: {str(e)}")
         return pd.DataFrame()
-
 # ============================================================
 # FUNGSI MENYIMPAN DATA KE SUPABASE
 # ============================================================
@@ -188,43 +188,46 @@ with col3:
 # ============================================================
 # HANDLE UPLOAD FILE
 # ============================================================
+# ============================================================
+# HANDLE UPLOAD FILE
+# ============================================================
 if uploaded_files:
     with st.spinner("Memproses file..."):
         all_dfs = []
         
         for uploaded_file in uploaded_files:
             try:
-                # Coba baca dengan utf-8 dulu
                 df_temp = pd.read_csv(uploaded_file, encoding="utf-8")
             except:
-                # Fallback ke latin1
                 df_temp = pd.read_csv(uploaded_file, encoding="latin1")
             
             all_dfs.append(df_temp)
         
-        # Gabungkan semua file
         if all_dfs:
             df_upload = pd.concat(all_dfs, ignore_index=True)
-            
-            # Validasi
             is_valid, msg = validate_csv(df_upload)
             
             if is_valid:
-                # Proses data
                 df_upload = process_data(df_upload)
                 
-                # Simpan ke Supabase
                 if save_to_supabase(df_upload):
                     st.success(f"✅ Berhasil upload {len(df_upload)} tiket!")
                     st.balloons()
-                    st.rerun()
+                    # PAKSA REFRESH dengan cara ini
+                    st.session_state['upload_success'] = True
+                    st.rerun()  # Langsung refresh halaman
                 else:
                     st.error("❌ Gagal menyimpan ke Supabase")
             else:
                 st.error(msg)
 
+# Jika baru saja upload, kita sudah st.rerun() jadi tidak perlu kode tambahan
+
 # ============================================================
 # LOAD DATA DARI SUPABASE
+# ============================================================
+# ============================================================
+# LOAD DATA DARI SUPABASE - DIJALANKAN SETIAP KALI RENDER
 # ============================================================
 df_db = pd.DataFrame()  # Inisialisasi kosong
 
@@ -232,13 +235,13 @@ with st.spinner("Memuat data..."):
     try:
         df_db = load_data_from_supabase()
     except Exception as e:
-        st.error(f"Error: {str(e)}")
+        st.error(f"Error saat memuat data: {str(e)}")
 
 # Jika tidak ada data
 if df_db.empty:
     st.warning("⚠️ Belum ada data. Silakan upload CSV terlebih dahulu.")
     st.info("📤 Klik tombol 'Browse files' di pojok kanan atas untuk upload")
-    st.stop()  # Hentikan eksekusi di sini
+    st.stop()
 
 # Kalau ada data, lanjutkan
 st.success(f"✅ Menampilkan {len(df_db)} tiket")
@@ -391,3 +394,4 @@ with col2:
 # ============================================================
 st.markdown("---")
 st.caption(f"🔄 Update terakhir: {datetime.now().strftime('%H:%M:%S')}")
+
