@@ -68,16 +68,29 @@ def load_data_from_supabase():
 # ============================================================
 def save_to_supabase(df):
     """
-    Menyimpan DataFrame ke tabel oss_data
-    Jika incident sudah ada, akan di-update
+    Menyimpan DataFrame ke tabel oss_data dengan debugging
     """
     supabase = init_supabase()
     if supabase is None:
         return False
     
     try:
+        # TAMPILKAN INFORMASI DEBUG
+        st.write("🔍 **DEBUG: Informasi DataFrame**")
+        st.write(f"Kolom di DataFrame: {list(df.columns)}")
+        
+        # Cek apakah ada kolom dengan spasi
+        kolom_bermasalah = [col for col in df.columns if ' ' in col]
+        if kolom_bermasalah:
+            st.warning(f"Kolom dengan spasi ditemukan: {kolom_bermasalah}")
+        
         # Siapkan data untuk dikirim
         records = df.to_dict('records')
+        
+        # Tampilkan sample record pertama
+        if records:
+            st.write("**Sample record pertama (sebelum dibersihkan):**")
+            st.json(records[0])
         
         # Bersihkan data: ganti NaN, NaT, infinity dengan None
         for record in records:
@@ -95,17 +108,20 @@ def save_to_supabase(df):
                 elif isinstance(value, pd.Timestamp):
                     record[key] = value.isoformat() if pd.notna(value) else None
         
-        # Upsert berdasarkan kolom 'incident' (primary key)
+        # Tampilkan sample record setelah dibersihkan
+        if records:
+            st.write("**Sample record pertama (setelah dibersihkan):**")
+            st.json(records[0])
+        
+        # Upsert ke database
         response = supabase.table('oss_data').upsert(records, on_conflict='incident').execute()
         
+        st.success("✅ Data berhasil dikirim ke Supabase!")
         return True
         
     except Exception as e:
         st.error(f"Gagal simpan data: {str(e)}")
-        # Untuk debugging
-        print(f"Error detail: {str(e)}")
         return False
-
 # ============================================================
 # FUNGSI VALIDASI CSV
 # ============================================================
@@ -541,6 +557,7 @@ with col2:
 # ============================================================
 st.markdown("---")
 st.caption(f"🔄 Auto-refresh setiap 5 menit. Update terakhir: {datetime.now().strftime('%H:%M:%S')}")
+
 
 
 
