@@ -40,28 +40,15 @@ def init_supabase():
 # ============================================================
 # FUNGSI MEMBACA DATA DARI SUPABASE
 # ============================================================
+# Ganti dari:
 @st.cache_data(ttl=300)
 def load_data_from_supabase():
-    """Membaca semua data dari tabel oss_data"""
-    supabase = init_supabase()
-    if supabase is None:
-        return pd.DataFrame()
-    
-    try:
-        response = supabase.table('oss_data').select('*').execute()
-        df = pd.DataFrame(response.data)
-        
-        # Hapus kolom internal
-        if 'id' in df.columns:
-            df = df.drop(columns=['id'])
-        if 'created_at' in df.columns:
-            df = df.drop(columns=['created_at'])
-            
-        return df
-        
-    except Exception as e:
-        st.error(f"Gagal baca data: {str(e)}")
-        return pd.DataFrame()
+    ...
+
+# Menjadi:
+# @st.cache_data(ttl=300)  # Dimatikan sementara
+def load_data_from_supabase():
+    ...
 
 # ============================================================
 # FUNGSI MENYIMPAN DATA KE SUPABASE
@@ -427,5 +414,6 @@ with col2:
 # ============================================================
 st.markdown("---")
 st.caption(f"🔄 Auto-refresh setiap 5 menit. Update terakhir: {datetime.now().strftime('%H:%M:%S')}")
+
 
 
