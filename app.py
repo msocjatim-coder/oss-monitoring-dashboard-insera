@@ -19,9 +19,9 @@ st.set_page_config(
 )
 
 # ============================================================
-# AUTO REFRESH (setiap 5 menit)
+# AUTO REFRESH (SETIAP 10 DETIK) - INI YANG DIPERBAIKI!
 # ============================================================
-st_autorefresh(interval=300000, limit=None, key="datarefresh")
+st_autorefresh(interval=10000, limit=None, key="autorefresh-10detik")
 
 # ============================================================
 # KONEKSI KE SUPABASE
@@ -38,11 +38,10 @@ def init_supabase():
         return None
 
 # ============================================================
-# FUNGSI MEMBACA DATA DARI SUPABASE (TANPA CACHE)
+# FUNGSI MEMBACA DATA DARI SUPABASE (TANPA CACHE!)
 # ============================================================
-# Hapus dekorator @st.cache_data - gunakan ini:
 def load_data_from_supabase():
-    """Membaca semua data dari tabel oss_data - tanpa cache"""
+    """Membaca semua data dari tabel oss_data - selalu fresh"""
     supabase = init_supabase()
     if supabase is None:
         return pd.DataFrame()
@@ -62,6 +61,7 @@ def load_data_from_supabase():
     except Exception as e:
         st.error(f"Gagal baca data: {str(e)}")
         return pd.DataFrame()
+
 # ============================================================
 # FUNGSI MENYIMPAN DATA KE SUPABASE
 # ============================================================
@@ -72,7 +72,6 @@ def save_to_supabase(df):
         return False
     
     try:
-        # Konversi dataframe ke records
         records = df.to_dict('records')
         
         # Bersihkan nilai yang tidak bisa di-JSON
@@ -111,12 +110,12 @@ def process_data(df):
     """Membersihkan data dan menambah kolom analisis"""
     df = df.copy()
     
-    # HAPUS KOLOM Unnamed (kolom indeks dari CSV)
+    # HAPUS KOLOM Unnamed
     unnamed_cols = [col for col in df.columns if 'Unnamed' in col or col == '']
     if unnamed_cols:
         df = df.drop(columns=unnamed_cols)
     
-    # Bersihkan nama kolom dari karakter aneh
+    # Bersihkan nama kolom
     df.columns = (
         df.columns
         .str.strip()
@@ -136,7 +135,7 @@ def process_data(df):
             except:
                 df[col] = pd.NaT
     
-    # Buat kolom LAYANAN untuk analisis
+    # Buat kolom LAYANAN
     if "SUMMARY" in df.columns:
         df["LAYANAN"] = df["SUMMARY"].astype(str).apply(
             lambda x: "TSEL" if "TSEL" in x.upper() else "OLO"
@@ -144,7 +143,7 @@ def process_data(df):
     else:
         df["LAYANAN"] = "UNKNOWN"
     
-    # Hitung umur tiket (hari) untuk analisis
+    # Hitung umur tiket
     if "REPORTED DATE" in df.columns:
         now = datetime.now()
         df["UMUR_TIKET_HARI"] = (now - df["REPORTED DATE"]).dt.days
@@ -166,18 +165,14 @@ def process_data(df):
 # TAMPILAN UTAMA DASHBOARD
 # ============================================================
 
-# Header dengan tombol refresh
-col1, col2, col3 = st.columns([8, 1, 2])
+# Header
+col1, col2 = st.columns([8, 2])
 
 with col1:
     st.title("📊 OSS Monitoring Dashboard")
-    st.caption("Data tersimpan otomatis di Supabase")
+    st.caption("Auto-refresh setiap 10 detik | Data otomatis ke Google Sheet")
 
 with col2:
-    if st.button("🔄 Refresh"):
-        st.rerun()
-
-with col3:
     uploaded_files = st.file_uploader(
         "Upload CSV",
         type=["csv"],
@@ -185,9 +180,6 @@ with col3:
         label_visibility="collapsed"
     )
 
-# ============================================================
-# HANDLE UPLOAD FILE
-# ============================================================
 # ============================================================
 # HANDLE UPLOAD FILE
 # ============================================================
@@ -213,38 +205,23 @@ if uploaded_files:
                 if save_to_supabase(df_upload):
                     st.success(f"✅ Berhasil upload {len(df_upload)} tiket!")
                     st.balloons()
-                    # PAKSA REFRESH dengan cara ini
-                    st.session_state['upload_success'] = True
-                    st.rerun()  # Langsung refresh halaman
+                    st.rerun()  # Refresh langsung setelah upload
                 else:
                     st.error("❌ Gagal menyimpan ke Supabase")
             else:
                 st.error(msg)
 
-# Jika baru saja upload, kita sudah st.rerun() jadi tidak perlu kode tambahan
-
 # ============================================================
-# LOAD DATA DARI SUPABASE
+# LOAD DATA DARI SUPABASE (FRESH SETIAP RENDER)
 # ============================================================
-# ============================================================
-# LOAD DATA DARI SUPABASE - DIJALANKAN SETIAP KALI RENDER
-# ============================================================
-df_db = pd.DataFrame()  # Inisialisasi kosong
-
 with st.spinner("Memuat data..."):
-    try:
-        df_db = load_data_from_supabase()
-    except Exception as e:
-        st.error(f"Error saat memuat data: {str(e)}")
+    df_db = load_data_from_supabase()
 
 # Jika tidak ada data
 if df_db.empty:
     st.warning("⚠️ Belum ada data. Silakan upload CSV terlebih dahulu.")
     st.info("📤 Klik tombol 'Browse files' di pojok kanan atas untuk upload")
     st.stop()
-
-# Kalau ada data, lanjutkan
-st.success(f"✅ Menampilkan {len(df_db)} tiket")
 
 # ============================================================
 # SIAPKAN DATA UNTUK DITAMPILKAN
@@ -393,5 +370,4 @@ with col2:
 # FOOTER
 # ============================================================
 st.markdown("---")
-st.caption(f"🔄 Update terakhir: {datetime.now().strftime('%H:%M:%S')}")
-
+st.caption(f"🔄 Auto-refresh setiap 10 detik | Terakhir: {datetime.now().strftime('%H:%M:%S')}")
