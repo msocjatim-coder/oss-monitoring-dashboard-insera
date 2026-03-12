@@ -189,7 +189,7 @@ def process_data(df):
         "CONTACT PHONE": "contact_phone",
         "CONTACT NAME": "contact_name",
         "CONTACT EMAIL": "contact_email",
-        "BOOKING DATE": "booking_date",  # <- INI YANG DIPERBAIKI (tanpa spasi, lowercase)
+        "BOOKING DATE": "booking_date",  # <- INI YANG BENAR (lowercase, underscore)
         "DESCRIPTION ASSIGMENT": "description_assigment",
         "REPORTED PRIORITY": "reported_priority",
         "SOURCE TICKET": "source_ticket",
@@ -541,5 +541,6 @@ with col2:
 # ============================================================
 st.markdown("---")
 st.caption(f"🔄 Auto-refresh setiap 5 menit. Update terakhir: {datetime.now().strftime('%H:%M:%S')}")
+
 
 
