@@ -79,12 +79,21 @@ def save_to_supabase(df):
         # Siapkan data untuk dikirim
         records = df.to_dict('records')
         
-        # Hapus kolom yang tidak perlu di database
+        # Bersihkan data: ganti NaN, NaT, infinity dengan None
         for record in records:
-            if 'id' in record:
-                del record['id']
-            if 'created_at' in record:
-                del record['created_at']
+            for key, value in list(record.items()):
+                # Hapus kolom internal
+                if key in ['id', 'created_at']:
+                    del record[key]
+                    continue
+                
+                # Ganti nilai yang tidak bisa di-JSON
+                if pd.isna(value):  # NaN, NaT, None
+                    record[key] = None
+                elif isinstance(value, float) and (value == float('inf') or value == float('-inf')):
+                    record[key] = None
+                elif isinstance(value, pd.Timestamp):
+                    record[key] = value.isoformat() if pd.notna(value) else None
         
         # Upsert berdasarkan kolom 'incident' (primary key)
         response = supabase.table('oss_data').upsert(records, on_conflict='incident').execute()
@@ -93,6 +102,8 @@ def save_to_supabase(df):
         
     except Exception as e:
         st.error(f"Gagal simpan data: {str(e)}")
+        # Untuk debugging
+        print(f"Error detail: {str(e)}")
         return False
 
 # ============================================================
@@ -531,3 +542,4 @@ with col2:
 # ============================================================
 st.markdown("---")
 st.caption(f"🔄 Auto-refresh setiap 5 menit. Update terakhir: {datetime.now().strftime('%H:%M:%S')}")
+
