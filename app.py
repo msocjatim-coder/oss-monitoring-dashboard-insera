@@ -25,6 +25,72 @@ st.set_page_config(
 st_autorefresh(interval=10000, limit=None, key="autorefresh-10detik")
 
 # ============================================================
+# CSS UNTUK MEMPERKECIL FONT DAN SPASI METRIK
+# ============================================================
+st.markdown("""
+<style>
+    /* Perkecil font metric */
+    [data-testid="stMetric"] {
+        background-color: transparent;
+        padding: 0px !important;
+        margin: 0px !important;
+    }
+    
+    [data-testid="stMetricLabel"] {
+        font-size: 0.7rem !important;
+        font-weight: normal !important;
+        margin-bottom: -5px !important;
+    }
+    
+    [data-testid="stMetricValue"] {
+        font-size: 1.2rem !important;
+        line-height: 1.2 !important;
+    }
+    
+    [data-testid="stMetricDelta"] {
+        font-size: 0.6rem !important;
+    }
+    
+    /* Kurangi padding kolom */
+    .st-emotion-cache-1r6slb0 {
+        padding: 0.5rem !important;
+    }
+    
+    /* Perkecil jarak antar kolom */
+    .st-emotion-cache-ocqkz7 {
+        gap: 0.2rem !important;
+    }
+    
+    /* Perkecil jarak di dalam expander */
+    .st-emotion-cache-1rsyhus {
+        padding: 0.5rem !important;
+    }
+    
+    /* Warna untuk severity */
+    .severity-premium {
+        color: #FF4B4B !important;
+        font-weight: bold;
+    }
+    .severity-critical {
+        color: #FF6B6B !important;
+        font-weight: bold;
+    }
+    .severity-major {
+        color: #FFA500 !important;
+        font-weight: bold;
+    }
+    .severity-minor {
+        color: #FFD700 !important;
+        font-weight: bold;
+    }
+    .severity-low {
+        color: #00C851 !important;
+        font-weight: bold;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ============================================================
 # KONEKSI KE SUPABASE
 # ============================================================
 @st.cache_resource
@@ -355,7 +421,7 @@ tab1, tab2, tab3 = st.tabs(["📂 TIKET OPEN", "📁 TIKET CLOSE", "📥 DOWNLOA
 
 with tab1:
     # ========================================================
-    # METRIKS RINGKASAN
+    # METRIKS RINGKASAN (DALAM 1 BARIS)
     # ========================================================
     df_open = df_display[df_display["IS_ACTIVE"] == True].copy() if "IS_ACTIVE" in df_display.columns else df_display.copy()
     
@@ -365,48 +431,34 @@ with tab1:
         for sev in ["PREMIUM", "CRITICAL", "MAJOR", "MINOR", "LOW"]:
             severity_counts[sev] = len(df_open[df_open["SEVERITY"] == sev])
     
-    # Tampilkan metrik dalam 5 kolom
-    col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
+    # Tampilkan semua metrik dalam 1 baris (7 kolom)
+    cols = st.columns(7)
     
-    with col_m1:
-        total_tiket_open = len(df_open)
-        st.metric("📋 TOTAL TIKET", f"{total_tiket_open}")
+    with cols[0]:
+        st.metric("📋 TOTAL", f"{len(df_open)}")
     
-    with col_m2:
+    with cols[1]:
         if "LAYANAN" in df_open.columns:
             tsel_open = len(df_open[df_open["LAYANAN"] == "TSEL"])
             olo_open = len(df_open[df_open["LAYANAN"] == "OLO"])
-            st.metric("📊 LAYANAN", f"{tsel_open} TSEL", f"{olo_open} OLO")
+            st.metric("📊 LAYANAN", f"{tsel_open}|{olo_open}", help="TSEL | OLO")
         else:
             st.metric("📊 LAYANAN", "N/A")
     
-    with col_m3:
-        # PREMIUM
+    with cols[2]:
         st.metric("🔴 PREMIUM", severity_counts.get("PREMIUM", 0))
     
-    with col_m4:
-        # CRITICAL
+    with cols[3]:
         st.metric("🔥 CRITICAL", severity_counts.get("CRITICAL", 0))
     
-    with col_m5:
-        # MAJOR
+    with cols[4]:
         st.metric("⚠️ MAJOR", severity_counts.get("MAJOR", 0))
     
-    col_m6, col_m7, col_m8, col_m9 = st.columns(4)
+    with cols[5]:
+        st.metric("🟡 MINOR", severity_counts.get("MINOR", 0))
     
-    with col_m6:
-        # MINOR
-        st.metric("🔹 MINOR", severity_counts.get("MINOR", 0))
-    
-    with col_m7:
-        # LOW
+    with cols[6]:
         st.metric("🟢 LOW", severity_counts.get("LOW", 0))
-    
-    with col_m8:
-        st.metric(" ", " ")
-    
-    with col_m9:
-        st.metric(" ", " ")
     
     st.markdown("---")
     
@@ -455,12 +507,25 @@ with tab1:
         ttr_formatted = format_ttr(row.get("TTR CUSTOMER"))
         last_update_formatted = format_last_update(row.get("LAST UPDATE WORKLOG"))
         
+        # Tentukan class severity untuk warna
+        severity_class = ""
+        if row.get("SEVERITY") == "PREMIUM":
+            severity_class = "severity-premium"
+        elif row.get("SEVERITY") == "CRITICAL":
+            severity_class = "severity-critical"
+        elif row.get("SEVERITY") == "MAJOR":
+            severity_class = "severity-major"
+        elif row.get("SEVERITY") == "MINOR":
+            severity_class = "severity-minor"
+        elif row.get("SEVERITY") == "LOW":
+            severity_class = "severity-low"
+        
         tabel_open.append({
             "NO": len(tabel_open) + 1,
             "INCIDENT": row.get("INCIDENT", "-"),
             "LAYANAN": row.get("LAYANAN", "-"),
             "SERVICE ID": row.get("SERVICE ID", "-"),
-            "SEVERITY": row.get("SEVERITY", "-"),
+            "SEVERITY": f'<span class="{severity_class}">{row.get("SEVERITY", "-")}</span>',
             "IMPACT": row.get("IMPACT", 1),
             "WITEL": row.get("WITEL", "-"),
             "TTR CUSTOMER": ttr_formatted,
@@ -476,26 +541,30 @@ with tab1:
     if df_tabel_open.empty:
         st.info("Tidak ada tiket open")
     else:
-        st.dataframe(
-            df_tabel_open,
-            use_container_width=True,
-            hide_index=True,
-            height=500,
-            column_config={
-                "NO": st.column_config.NumberColumn("NO", width="small"),
-                "INCIDENT": st.column_config.TextColumn("INCIDENT", width="medium"),
-                "LAYANAN": st.column_config.TextColumn("LAYANAN", width="small"),
-                "SERVICE ID": st.column_config.TextColumn("SERVICE ID", width="medium"),
-                "SEVERITY": st.column_config.TextColumn("SEVERITY", width="small"),
-                "IMPACT": st.column_config.NumberColumn("IMPACT", width="small"),
-                "WITEL": st.column_config.TextColumn("WITEL", width="small"),
-                "TTR CUSTOMER": st.column_config.TextColumn("TTR CUSTOMER", width="small"),
-                "WORKLOG SUMMARY": st.column_config.TextColumn("WORKLOG SUMMARY", width="large"),
-                "LAST UPDATE WORKLOG": st.column_config.TextColumn("LAST UPDATE", width="small")
-            }
-        )
+        st.write("### 📋 Daftar Tiket Open")
         
-        st.caption(f"Menampilkan {len(df_tabel_open)} tiket open")
+        # Tampilkan tabel dengan HTML untuk warna
+        for idx, row in df_tabel_open.iterrows():
+            cols = st.columns([0.5, 1.5, 0.8, 1.5, 1, 0.5, 1, 1.5, 1.5, 1])
+            
+            cols[0].write(f"**{row['NO']}**")
+            cols[1].write(row['INCIDENT'])
+            cols[2].write(row['LAYANAN'])
+            cols[3].write(row['SERVICE ID'])
+            cols[4].markdown(row['SEVERITY'], unsafe_allow_html=True)
+            cols[5].write(row['IMPACT'])
+            cols[6].write(row['WITEL'])
+            cols[7].write(row['TTR CUSTOMER'])
+            
+            # WORKLOG SUMMARY dengan wrap text
+            worklog = str(row['WORKLOG SUMMARY'])
+            if len(worklog) > 50:
+                worklog = worklog[:50] + "..."
+            cols[8].write(worklog)
+            
+            cols[9].write(row['LAST UPDATE WORKLOG'])
+            
+            st.markdown("---")
 
 with tab2:
     st.subheader("🔍 Tiket Close (Status Tidak Aktif)")
