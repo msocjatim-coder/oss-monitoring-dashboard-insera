@@ -281,6 +281,99 @@ def format_last_update(date_str):
         return str(date_str)
 
 # ============================================================
+# FUNGSI KLASIFIKASI LAYANAN BERDASARKAN SUMMARY
+# ============================================================
+def klasifikasi_layanan(summary):
+    """
+    Mengklasifikasikan jenis layanan berdasarkan pola dalam SUMMARY
+    Mengikuti aturan yang sudah dianalisis dari contoh-contoh
+    """
+    if pd.isna(summary) or summary is None or summary == "":
+        return "UNKNOWN"
+    
+    summary_str = str(summary)
+    summary_upper = summary_str.upper()
+    
+    # 1. TSEL METRO-E
+    if "TSEL_METRO" in summary_upper and not any(x in summary_upper for x in ["HYBRID", "CNQ"]):
+        if "HYBRID" not in summary_upper:
+            return "TSEL METRO-E"
+    
+    # 2. TSEL CNQ
+    if "TSEL_CNQ" in summary_upper and "RADIOIP" not in summary_upper:
+        return "TSEL CNQ"
+    
+    # 3. TSEL CNOP
+    if "TSEL_CNOP" in summary_upper:
+        return "TSEL CNOP"
+    
+    # 4. TSEL IP-TRANSIT
+    if "TSEL_IPTRANSIT" in summary_upper:
+        return "TSEL IP-TRANSIT"
+    
+    # 5. OLO ASTINET - berdasarkan TOPOLO_TSEL_ASTINET, ASTINET, TSEL_ASTINET
+    astinet_keywords = ["ASTINET", "TSEL_ASTINET", "TOPOLO_TSEL_ASTINET"]
+    if any(keyword in summary_upper for keyword in astinet_keywords):
+        return "OLO ASTINET"
+    
+    # 6. OLO-SENTRAL - berdasarkan kata E1, OPC, DPC
+    if any(x in summary_upper for x in ["E1", "OPC", "DPC"]):
+        return "OLO-SENTRAL"
+    
+    # 7. TOP OLO - jika diawali [TIF] atau [DWS] atau mengandung TOPOLO (dan bukan ASTINET)
+    #    dan tidak termasuk kategori lain
+    is_top_olo = False
+    
+    # Cek diawali [TIF] atau [DWS]
+    if summary_str.strip().startswith(('[TIF]', '[DWS]')):
+        is_top_olo = True
+    
+    # Cek mengandung TOPOLO (tapi bukan TOPOLO_TSEL_ASTINET)
+    if "TOPOLO" in summary_upper and "ASTINET" not in summary_upper:
+        is_top_olo = True
+    
+    # Cek provider TOP OLO lainnya
+    top_olo_keywords = [
+        "FIBERSTAR", "MORATEL", "WHIZ", "GAYATRI", "ICON", "MILENET", 
+        "ISP", "MMA", "HIPERNET", "ANDIRA", "NUSANET", "CDN", "MTI", "DIGISAT"
+    ]
+    if any(keyword in summary_upper for keyword in top_olo_keywords):
+        is_top_olo = True
+    
+    if is_top_olo:
+        return "TOP OLO"
+    
+    # 8. RADIO-IP
+    if "TSEL_RADIOIP" in summary_upper and "CNQ" not in summary_upper:
+        return "RADIO-IP"
+    
+    # 9. TSEL HYBRID
+    if "TSEL_METRO" in summary_upper and "HYBRID" in summary_upper:
+        return "TSEL HYBRID"
+    
+    # 10. TSEL SLD
+    if "TSEL_SLD" in summary_upper:
+        return "TSEL SLD"
+    
+    # 11. RADIO CNQ
+    if "TSEL_CNQ_RADIOIP" in summary_upper:
+        return "RADIO CNQ"
+    
+    # 12. RADIO-LH
+    if "TSEL_RADIOLH" in summary_upper:
+        return "RADIO-LH"
+    
+    # 13. Default untuk yang mengandung TSEL tapi tidak terdeteksi
+    if "TSEL" in summary_upper:
+        return "TSEL LAINNYA"
+    
+    # 14. Default untuk yang mengandung OLO
+    if any(x in summary_upper for x in ["OLO", "TOPOLO", "IFORTE", "C_CONN"]):
+        return "OLO LAINNYA"
+    
+    return "UNKNOWN"
+
+# ============================================================
 # FUNGSI MEMPROSES DATA
 # ============================================================
 def process_data(df):
@@ -308,11 +401,9 @@ def process_data(df):
             except:
                 df[col] = pd.NaT
     
-    # Buat kolom LAYANAN
+    # Buat kolom LAYANAN menggunakan fungsi klasifikasi baru
     if "SUMMARY" in df.columns:
-        df["LAYANAN"] = df["SUMMARY"].astype(str).apply(
-            lambda x: "TSEL" if "TSEL" in x.upper() else "OLO"
-        )
+        df["LAYANAN"] = df["SUMMARY"].astype(str).apply(klasifikasi_layanan)
     else:
         df["LAYANAN"] = "UNKNOWN"
     
@@ -388,6 +479,7 @@ if uploaded_files:
                 if save_to_supabase(df_upload):
                     st.success(f"✅ Berhasil upload {len(df_upload)} tiket!")
                     st.balloons()
+                    st.cache_data.clear()  # Hapus cache
                     st.rerun()  # Refresh langsung setelah upload
                 else:
                     st.error("❌ Gagal menyimpan ke Supabase")
@@ -433,9 +525,10 @@ with tab1:
     
     with cols[1]:
         if "LAYANAN" in df_open.columns:
-            tsel_open = len(df_open[df_open["LAYANAN"] == "TSEL"])
-            olo_open = len(df_open[df_open["LAYANAN"] == "OLO"])
-            st.metric("📊 LAYANAN", f"{tsel_open}|{olo_open}", help="TSEL | OLO")
+            # Hitung distribusi layanan untuk tooltip
+            layanan_counts = df_open["LAYANAN"].value_counts()
+            layanan_text = ", ".join([f"{k}: {v}" for k, v in layanan_counts.items()])
+            st.metric("📊 LAYANAN", f"{len(df_open)}", help=layanan_text)
         else:
             st.metric("📊 LAYANAN", "N/A")
     
@@ -530,7 +623,7 @@ with tab1:
             column_config={
                 "NO": st.column_config.NumberColumn("NO", width="small"),
                 "INCIDENT": st.column_config.TextColumn("INCIDENT", width="medium"),
-                "LAYANAN": st.column_config.TextColumn("LAYANAN", width="small"),
+                "LAYANAN": st.column_config.TextColumn("LAYANAN", width="medium"),
                 "SERVICE ID": st.column_config.TextColumn("SERVICE ID", width="medium"),
                 "SEVERITY": st.column_config.TextColumn("SEVERITY", width="small"),
                 "IMPACT": st.column_config.NumberColumn("IMPACT", width="small"),
