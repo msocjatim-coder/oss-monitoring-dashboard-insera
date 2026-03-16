@@ -427,7 +427,7 @@ def process_data(df):
     else:
         df["UMUR_TIKET_HARI"] = 0
     
-    # Tentukan status aktif
+    # Tentukan status aktif (ini tidak dipakai lagi, tapi biarkan saja)
     if "STATUS" in df.columns:
         df["IS_ACTIVE"] = ~df["STATUS"].astype(str).str.lower().isin(
             ["closed", "resolved", "cancel"]
@@ -507,11 +507,14 @@ tab1, tab2, tab3 = st.tabs(["📂 TIKET OPEN", "📁 TIKET CLOSE", "📥 DOWNLOA
 
 with tab1:
     # ========================================================
-    # METRIKS RINGKASAN (1 BARIS)
+    # METRIKS RINGKASAN (1 BARIS) - HANYA UNTUK STATUS BACKEND
     # ========================================================
-    df_open = df_display[df_display["IS_ACTIVE"] == True].copy() if "IS_ACTIVE" in df_display.columns else df_display.copy()
+    # Filter khusus untuk TIKET OPEN: STATUS mengandung BACKEND
+    df_open = df_display[
+        df_display["STATUS"].astype(str).str.contains("BACKEND", case=False, na=False)
+    ].copy() if "STATUS" in df_display.columns else pd.DataFrame()
     
-    # Hitung severity counts
+    # Hitung severity counts hanya untuk data OPEN
     severity_counts = {}
     if "SEVERITY" in df_open.columns:
         for sev in ["PREMIUM", "CRITICAL", "MAJOR", "MINOR", "LOW"]:
@@ -613,7 +616,7 @@ with tab1:
     # TAMPILKAN TABEL DENGAN ST.DATAFRAME
     # ========================================================
     if df_tabel_open.empty:
-        st.info("Tidak ada tiket open")
+        st.info("Tidak ada tiket open (Status BACKEND)")
     else:
         st.dataframe(
             df_tabel_open,
@@ -634,11 +637,14 @@ with tab1:
             }
         )
         
-        st.caption(f"Menampilkan {len(df_tabel_open)} tiket open")
+        st.caption(f"Menampilkan {len(df_tabel_open)} tiket open (Status BACKEND)")
 
 with tab2:
-    st.subheader("🔍 Tiket Close (Status Tidak Aktif)")
+    st.subheader("🔍 Tiket Close (Status: CLOSED / SALAMSIM)")
     
+    # ========================================================
+    # FILTER UNTUK TIKET CLOSE
+    # ========================================================
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1:
         if "WITEL" in df_display.columns:
@@ -648,52 +654,85 @@ with tab2:
             pilih_witel_close = []
     
     with col_f2:
-        if "LAYANAN" in df_display.columns:
-            semua_layanan = sorted(df_display["LAYANAN"].unique())
-            pilih_layanan_close = st.multiselect("Pilih LAYANAN", semua_layanan, default=[], key="layanan_close")
+        if "CAUSE" in df_display.columns:
+            semua_cause = sorted(df_display["CAUSE"].dropna().unique())
+            pilih_cause = st.multiselect("Filter CAUSE", semua_cause, default=[], key="cause_filter")
         else:
-            pilih_layanan_close = []
+            pilih_cause = []
     
     with col_f3:
         cari_incident_close = st.text_input("🔎 Cari INCIDENT", placeholder="Ketik nomor INC...", key="cari_close")
     
-    df_close = df_display[df_display["IS_ACTIVE"] == False].copy() if "IS_ACTIVE" in df_display.columns else pd.DataFrame()
+    # ========================================================
+    # FILTER DATA BERDASARKAN STATUS (CLOSED / SALAMSIM)
+    # ========================================================
+    # Ambil data dengan STATUS yang mengandung CLOSED atau SALAMSIM
+    df_close = df_display[
+        df_display["STATUS"].astype(str).str.contains("CLOSED|SALAMSIM", case=False, na=False)
+    ].copy() if "STATUS" in df_display.columns else pd.DataFrame()
     
     if not df_close.empty:
+        # Terapkan filter tambahan
         if pilih_witel_close and "WITEL" in df_close.columns:
             df_close = df_close[df_close["WITEL"].isin(pilih_witel_close)]
-        if pilih_layanan_close and "LAYANAN" in df_close.columns:
-            df_close = df_close[df_close["LAYANAN"].isin(pilih_layanan_close)]
+        
+        if pilih_cause and "CAUSE" in df_close.columns:
+            df_close = df_close[df_close["CAUSE"].isin(pilih_cause)]
+        
         if cari_incident_close and "INCIDENT" in df_close.columns:
             df_close = df_close[df_close["INCIDENT"].astype(str).str.contains(cari_incident_close, case=False, na=False)]
     
-    # Siapkan tabel untuk tiket close
+    # ========================================================
+    # SIAPKAN DATA UNTUK TABEL
+    # ========================================================
     tabel_close = []
+    
     for idx, row in df_close.iterrows():
+        # Format TTR CUSTOMER dari 01:59:07 menjadi "01 Jam 59 Menit"
+        ttr_formatted = format_ttr(row.get("TTR CUSTOMER"))
+        
+        # Format STATUS DATE dari 2026-03-16T17:43:17 menjadi "16 Maret, Pukul 17:43"
+        status_date_formatted = format_last_update(row.get("STATUS DATE"))
+        
         tabel_close.append({
             "NO": len(tabel_close) + 1,
             "INCIDENT": row.get("INCIDENT", "-"),
-            "LAYANAN": row.get("LAYANAN", "-"),
-            "SERVICE ID": row.get("SERVICE ID", "-"),
-            "SEVERITY": row.get("SEVERITY", "-"),
-            "IMPACT": row.get("IMPACT", 1),
             "WITEL": row.get("WITEL", "-"),
+            "SUMMARY": row.get("SUMMARY", "-"),
+            "TTR CUSTOMER": ttr_formatted,
+            "CAUSE": row.get("CAUSE", "-"),
+            "RESOLUTION": row.get("RESOLUTION", "-"),
             "STATUS": row.get("STATUS", "-"),
-            "REPORTED DATE": row.get("REPORTED DATE", "-")
+            "STATUS DATE": status_date_formatted
         })
     
     df_tabel_close = pd.DataFrame(tabel_close)
     
+    # ========================================================
+    # TAMPILKAN TABEL
+    # ========================================================
     if df_tabel_close.empty:
-        st.info("Tidak ada tiket close")
+        st.info("Tidak ada tiket close (Status CLOSED/SALAMSIM)")
     else:
-        kolom_tampil_close = ["NO", "INCIDENT", "LAYANAN", "SERVICE ID", "SEVERITY", "IMPACT", "WITEL", "STATUS", "REPORTED DATE"]
         st.dataframe(
-            df_tabel_close[kolom_tampil_close],
+            df_tabel_close,
             use_container_width=True,
-            hide_index=True
+            hide_index=True,
+            height=500,
+            column_config={
+                "NO": st.column_config.NumberColumn("NO", width="small"),
+                "INCIDENT": st.column_config.TextColumn("INCIDENT", width="medium"),
+                "WITEL": st.column_config.TextColumn("WITEL", width="small"),
+                "SUMMARY": st.column_config.TextColumn("SUMMARY", width="large"),
+                "TTR CUSTOMER": st.column_config.TextColumn("TTR", width="small"),
+                "CAUSE": st.column_config.TextColumn("CAUSE", width="medium"),
+                "RESOLUTION": st.column_config.TextColumn("RESOLUTION", width="medium"),
+                "STATUS": st.column_config.TextColumn("STATUS", width="small"),
+                "STATUS DATE": st.column_config.TextColumn("STATUS DATE", width="small")
+            }
         )
-        st.caption(f"Menampilkan {len(df_tabel_close)} tiket close")
+        
+        st.caption(f"Menampilkan {len(df_tabel_close)} tiket close (Status CLOSED/SALAMSIM)")
 
 with tab3:
     st.subheader("📥 Download Tiket (Semua Kolom)")
