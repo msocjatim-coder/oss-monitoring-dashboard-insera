@@ -104,6 +104,59 @@ def validate_csv(df):
     return True, "OK"
 
 # ============================================================
+# FUNGSI EKSTRAK SEVERITY DARI SUMMARY
+# ============================================================
+def ekstrak_severity(summary):
+    """
+    Mengekstrak severity (LOW, MINOR, MAJOR, CRITICAL, PREMIUM) dari SUMMARY
+    """
+    if pd.isna(summary) or summary is None or summary == "":
+        return "-"
+    
+    summary_str = str(summary).upper()
+    
+    severity_list = ["PREMIUM", "CRITICAL", "MAJOR", "MINOR", "LOW"]
+    
+    for severity in severity_list:
+        if severity in summary_str:
+            return severity
+    
+    return "-"
+
+# ============================================================
+# FUNGSI EKSTRAK JUMLAH SITE DARI SUMMARY
+# ============================================================
+def ekstrak_jumlah_site(summary):
+    """
+    Mengekstrak jumlah site dari SUMMARY
+    Contoh:
+    - "4NODEB" -> 4
+    - "9NODEB" -> 9
+    - "117BTS" -> 117
+    - Jika tidak ada pola, default 1
+    """
+    if pd.isna(summary) or summary is None or summary == "":
+        return 1
+    
+    summary_str = str(summary).upper()
+    
+    # Cari pola seperti 4NODEB, 9NODEB, 117BTS, dll
+    pattern = r'(\d+)(?:NODEB|BTS)'
+    match = re.search(pattern, summary_str)
+    
+    if match:
+        return int(match.group(1))
+    
+    # Jika ada kata "SITE" diikuti angka (jarang terjadi)
+    pattern2 = r'SITE[:\s]*(\d+)'
+    match2 = re.search(pattern2, summary_str)
+    if match2:
+        return int(match2.group(1))
+    
+    # Default: 1 site
+    return 1
+
+# ============================================================
 # FUNGSI FORMAT TTR CUSTOMER
 # ============================================================
 def format_ttr(ttr_value):
@@ -195,6 +248,7 @@ def process_data(df):
             except:
                 df[col] = pd.NaT
     
+    # Buat kolom LAYANAN
     if "SUMMARY" in df.columns:
         df["LAYANAN"] = df["SUMMARY"].astype(str).apply(
             lambda x: "TSEL" if "TSEL" in x.upper() else "OLO"
@@ -202,6 +256,19 @@ def process_data(df):
     else:
         df["LAYANAN"] = "UNKNOWN"
     
+    # Buat kolom SEVERITY
+    if "SUMMARY" in df.columns:
+        df["SEVERITY"] = df["SUMMARY"].apply(ekstrak_severity)
+    else:
+        df["SEVERITY"] = "-"
+    
+    # Buat kolom IMPACT (JUMLAH SITE)
+    if "SUMMARY" in df.columns:
+        df["IMPACT"] = df["SUMMARY"].apply(ekstrak_jumlah_site)
+    else:
+        df["IMPACT"] = 1
+    
+    # Hitung umur tiket
     if "REPORTED DATE" in df.columns:
         now = datetime.now()
         df["UMUR_TIKET_HARI"] = (now - df["REPORTED DATE"]).dt.days
@@ -209,6 +276,7 @@ def process_data(df):
     else:
         df["UMUR_TIKET_HARI"] = 0
     
+    # Tentukan status aktif
     if "STATUS" in df.columns:
         df["IS_ACTIVE"] = ~df["STATUS"].astype(str).str.lower().isin(
             ["closed", "resolved", "cancel"]
@@ -277,7 +345,8 @@ if df_db.empty:
     st.info("📤 Klik tombol 'Browse files' di pojok kanan atas untuk upload")
     st.stop()
 
-df_display = df_db.copy()
+# Proses data untuk menambah kolom analisis
+df_display = process_data(df_db)
 
 # ============================================================
 # MEMBUAT 3 TAB MENU
@@ -305,20 +374,47 @@ with tab1:
             st.metric("📊 LAYANAN", "N/A")
     
     with col_m3:
-        st.metric(" ", " ")
+        # METRIK SEVERITY - jumlah tiket berdasarkan severity
+        if "SEVERITY" in df_open.columns:
+            severity_counts = df_open["SEVERITY"].value_counts()
+            # Prioritaskan menampilkan CRITICAL dulu
+            critical_count = severity_counts.get("CRITICAL", 0)
+            major_count = severity_counts.get("MAJOR", 0)
+            st.metric("⚠️ KRITIS", f"{critical_count}", f"Major: {major_count}")
+        else:
+            st.metric("⚠️ SEVERITY", "-")
     
     with col_m4:
-        st.metric(" ", " ")
+        # METRIK IMPACT - total site terdampak
+        if "IMPACT" in df_open.columns:
+            total_impact = df_open["IMPACT"].sum()
+            st.metric("🏢 TOTAL SITE", f"{total_impact}")
+        else:
+            st.metric("🏢 TOTAL SITE", "-")
     
     st.markdown("---")
     
     # ========================================================
     # FILTER
     # ========================================================
-    col_filter1, col_filter2 = st.columns([1, 3])
+    col_filter1, col_filter2, col_filter3 = st.columns([1, 1, 1])
     
     with col_filter1:
         cari_incident_open = st.text_input("🔎 Cari Incident", placeholder="Ketik nomor INC...", key="cari_open")
+    
+    with col_filter2:
+        if "SEVERITY" in df_open.columns:
+            semua_severity = sorted(df_open["SEVERITY"].unique())
+            pilih_severity = st.multiselect("Filter Severity", semua_severity, default=[], key="severity_filter")
+        else:
+            pilih_severity = []
+    
+    with col_filter3:
+        if "WITEL" in df_open.columns:
+            semua_witel = sorted(df_open["WITEL"].dropna().unique())
+            pilih_witel = st.multiselect("Filter WITEL", semua_witel, default=[], key="witel_filter")
+        else:
+            pilih_witel = []
     
     # ========================================================
     # FILTER DATA
@@ -327,6 +423,12 @@ with tab1:
     
     if cari_incident_open and "INCIDENT" in df_open_filtered.columns:
         df_open_filtered = df_open_filtered[df_open_filtered["INCIDENT"].astype(str).str.contains(cari_incident_open, case=False, na=False)]
+    
+    if pilih_severity and "SEVERITY" in df_open_filtered.columns:
+        df_open_filtered = df_open_filtered[df_open_filtered["SEVERITY"].isin(pilih_severity)]
+    
+    if pilih_witel and "WITEL" in df_open_filtered.columns:
+        df_open_filtered = df_open_filtered[df_open_filtered["WITEL"].isin(pilih_witel)]
     
     # ========================================================
     # SIAPKAN DATA UNTUK TABEL
@@ -342,6 +444,8 @@ with tab1:
             "INCIDENT": row.get("INCIDENT", "-"),
             "LAYANAN": row.get("LAYANAN", "-"),
             "SERVICE ID": row.get("SERVICE ID", "-"),
+            "SEVERITY": row.get("SEVERITY", "-"),
+            "IMPACT": row.get("IMPACT", 1),
             "WITEL": row.get("WITEL", "-"),
             "TTR CUSTOMER": ttr_formatted,
             "WORKLOG SUMMARY": row.get("WORKLOG SUMMARY", "-"),
@@ -351,7 +455,7 @@ with tab1:
     df_tabel_open = pd.DataFrame(tabel_open)
     
     # ========================================================
-    # TAMPILKAN TABEL
+    # TAMPILKAN TABEL (HANYA DATA YANG ADA)
     # ========================================================
     if df_tabel_open.empty:
         st.info("Tidak ada tiket open")
@@ -366,6 +470,8 @@ with tab1:
                 "INCIDENT": st.column_config.TextColumn("INCIDENT", width="medium"),
                 "LAYANAN": st.column_config.TextColumn("LAYANAN", width="small"),
                 "SERVICE ID": st.column_config.TextColumn("SERVICE ID", width="medium"),
+                "SEVERITY": st.column_config.TextColumn("SEVERITY", width="small"),
+                "IMPACT": st.column_config.NumberColumn("IMPACT", width="small"),
                 "WITEL": st.column_config.TextColumn("WITEL", width="small"),
                 "TTR CUSTOMER": st.column_config.TextColumn("TTR CUSTOMER", width="small"),
                 "WORKLOG SUMMARY": st.column_config.TextColumn("WORKLOG SUMMARY", width="large"),
@@ -406,18 +512,33 @@ with tab2:
         if cari_incident_close and "INCIDENT" in df_close.columns:
             df_close = df_close[df_close["INCIDENT"].astype(str).str.contains(cari_incident_close, case=False, na=False)]
     
-    kolom_tampil_close = ["INCIDENT", "STATUS", "WITEL", "REPORTED DATE", "SUMMARY", "LAYANAN"]
-    kolom_tampil_close = [k for k in kolom_tampil_close if k in df_close.columns]
+    # Siapkan tabel untuk tiket close
+    tabel_close = []
+    for idx, row in df_close.iterrows():
+        tabel_close.append({
+            "NO": len(tabel_close) + 1,
+            "INCIDENT": row.get("INCIDENT", "-"),
+            "LAYANAN": row.get("LAYANAN", "-"),
+            "SERVICE ID": row.get("SERVICE ID", "-"),
+            "SEVERITY": row.get("SEVERITY", "-"),
+            "IMPACT": row.get("IMPACT", 1),
+            "WITEL": row.get("WITEL", "-"),
+            "STATUS": row.get("STATUS", "-"),
+            "REPORTED DATE": row.get("REPORTED DATE", "-")
+        })
     
-    if df_close.empty:
+    df_tabel_close = pd.DataFrame(tabel_close)
+    
+    if df_tabel_close.empty:
         st.info("Tidak ada tiket close")
     else:
+        kolom_tampil_close = ["NO", "INCIDENT", "LAYANAN", "SERVICE ID", "SEVERITY", "IMPACT", "WITEL", "STATUS", "REPORTED DATE"]
         st.dataframe(
-            df_close[kolom_tampil_close],
+            df_tabel_close[kolom_tampil_close],
             use_container_width=True,
             hide_index=True
         )
-        st.caption(f"Menampilkan {len(df_close)} tiket close")
+        st.caption(f"Menampilkan {len(df_tabel_close)} tiket close")
 
 with tab3:
     st.subheader("📥 Download Tiket (Semua Kolom)")
