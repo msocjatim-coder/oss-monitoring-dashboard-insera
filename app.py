@@ -213,12 +213,6 @@ def ekstrak_jumlah_site(summary):
     if match:
         return int(match.group(1))
     
-    # Jika ada kata "SITE" diikuti angka (jarang terjadi)
-    pattern2 = r'SITE[:\s]*(\d+)'
-    match2 = re.search(pattern2, summary_str)
-    if match2:
-        return int(match2.group(1))
-    
     # Default: 1 site
     return 1
 
@@ -394,7 +388,7 @@ if uploaded_files:
                 if save_to_supabase(df_upload):
                     st.success(f"✅ Berhasil upload {len(df_upload)} tiket!")
                     st.balloons()
-                    st.rerun()
+                    st.rerun()  # Refresh langsung setelah upload
                 else:
                     st.error("❌ Gagal menyimpan ke Supabase")
             else:
@@ -499,7 +493,7 @@ with tab1:
         df_open_filtered = df_open_filtered[df_open_filtered["WITEL"].isin(pilih_witel)]
     
     # ========================================================
-    # SIAPKAN DATA UNTUK TABEL (KEMBALIKAN KE FORMAT SEDERHANA)
+    # SIAPKAN DATA UNTUK TABEL
     # ========================================================
     tabel_open = []
     
@@ -523,7 +517,7 @@ with tab1:
     df_tabel_open = pd.DataFrame(tabel_open)
     
     # ========================================================
-    # TAMPILKAN TABEL DENGAN ST.DATAFRAME (SEDERHANA)
+    # TAMPILKAN TABEL DENGAN ST.DATAFRAME
     # ========================================================
     if df_tabel_open.empty:
         st.info("Tidak ada tiket open")
@@ -548,16 +542,6 @@ with tab1:
         )
         
         st.caption(f"Menampilkan {len(df_tabel_open)} tiket open")
-            
-            # WORKLOG SUMMARY dengan wrap text
-            worklog = str(row['WORKLOG SUMMARY'])
-            if len(worklog) > 50:
-                worklog = worklog[:50] + "..."
-            cols[8].write(worklog)
-            
-            cols[9].write(row['LAST UPDATE WORKLOG'])
-            
-            st.markdown("---")
 
 with tab2:
     st.subheader("🔍 Tiket Close (Status Tidak Aktif)")
@@ -692,4 +676,3 @@ with tab3:
 st.markdown("---")
 wib_time = datetime.now(ZoneInfo("Asia/Jakarta")).strftime("%H:%M")
 st.caption(f"🔄 Auto-refresh setiap 10 detik | Data terakhir diperbarui pukul {wib_time} WIB")
-
