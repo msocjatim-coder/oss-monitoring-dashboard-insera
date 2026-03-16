@@ -6,7 +6,6 @@ import os
 import time
 import re
 from streamlit_autorefresh import st_autorefresh
-import pyperclip  # Untuk copy ke clipboard (opsional)
 
 # Supabase
 from supabase import create_client
@@ -116,10 +115,8 @@ def format_ttr(ttr_value):
     if pd.isna(ttr_value) or ttr_value is None or ttr_value == "":
         return "-"
     
-    # Konversi ke string
     ttr_str = str(ttr_value).strip()
     
-    # Handle format HH:MM:SS
     if ":" in ttr_str:
         parts = ttr_str.split(":")
         if len(parts) == 3:
@@ -128,7 +125,6 @@ def format_ttr(ttr_value):
                 minutes = int(parts[1])
                 seconds = int(parts[2])
                 
-                # Bulatkan menit (abaikan detik)
                 if seconds >= 30:
                     minutes += 1
                 if minutes >= 60:
@@ -147,7 +143,7 @@ def format_ttr(ttr_value):
     return ttr_str
 
 # ============================================================
-# FUNGSI FORMAT LAST UPDATE WORKLOG (DIPERBAIKI)
+# FUNGSI FORMAT LAST UPDATE WORKLOG
 # ============================================================
 def format_last_update(date_str):
     """
@@ -157,15 +153,13 @@ def format_last_update(date_str):
         return "-"
     
     try:
-        # Handle format ISO dengan T
         date_str = str(date_str)
         if "T" in date_str:
-            date_str = date_str.split(".")[0]  # Hapus millisecond
+            date_str = date_str.split(".")[0]
             dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
         else:
             dt = pd.to_datetime(date_str)
         
-        # Format: 01 Maret, Pukul 10:28
         nama_bulan = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", 
                       "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
         bulan = nama_bulan[dt.month - 1]
@@ -186,7 +180,6 @@ def buat_kalimat(service_id, worklog):
     service_id = str(service_id) if service_id and str(service_id) != "nan" else "-"
     worklog = str(worklog) if worklog and str(worklog) != "nan" else "-"
     
-    # Bersihkan worklog dari karakter aneh
     worklog = worklog.replace("\n", " ").replace("\r", " ").strip()
     
     kalimat = f"{service_id}\nProgres sebelumnya : {worklog}\nMohon dibantu updatenya kembali 🙏"
@@ -199,23 +192,19 @@ def process_data(df):
     """Membersihkan data dan menambah kolom analisis"""
     df = df.copy()
     
-    # HAPUS KOLOM Unnamed
     unnamed_cols = [col for col in df.columns if 'Unnamed' in col or col == '']
     if unnamed_cols:
         df = df.drop(columns=unnamed_cols)
     
-    # Bersihkan nama kolom
     df.columns = (
         df.columns
         .str.strip()
         .str.replace('"', '', regex=False)
     )
     
-    # CEK DUPLIKAT INCIDENT
     if "INCIDENT" in df.columns:
         df = df.drop_duplicates(subset=["INCIDENT"], keep="first")
     
-    # Konversi kolom datetime
     date_columns = ["REPORTED DATE", "STATUS DATE", "DATEMODIFIED", "LAST UPDATE WORKLOG", "RESOLVE DATE"]
     for col in date_columns:
         if col in df.columns:
@@ -224,7 +213,6 @@ def process_data(df):
             except:
                 df[col] = pd.NaT
     
-    # Buat kolom LAYANAN
     if "SUMMARY" in df.columns:
         df["LAYANAN"] = df["SUMMARY"].astype(str).apply(
             lambda x: "TSEL" if "TSEL" in x.upper() else "OLO"
@@ -232,7 +220,6 @@ def process_data(df):
     else:
         df["LAYANAN"] = "UNKNOWN"
     
-    # Hitung umur tiket
     if "REPORTED DATE" in df.columns:
         now = datetime.now()
         df["UMUR_TIKET_HARI"] = (now - df["REPORTED DATE"]).dt.days
@@ -240,7 +227,6 @@ def process_data(df):
     else:
         df["UMUR_TIKET_HARI"] = 0
     
-    # Tentukan status aktif
     if "STATUS" in df.columns:
         df["IS_ACTIVE"] = ~df["STATUS"].astype(str).str.lower().isin(
             ["closed", "resolved", "cancel"]
@@ -254,7 +240,6 @@ def process_data(df):
 # TAMPILAN UTAMA DASHBOARD
 # ============================================================
 
-# Header
 col1, col2 = st.columns([8, 2])
 
 with col1:
@@ -305,15 +290,11 @@ if uploaded_files:
 with st.spinner("Memuat data..."):
     df_db = load_data_from_supabase()
 
-# Jika tidak ada data
 if df_db.empty:
     st.warning("⚠️ Belum ada data. Silakan upload CSV terlebih dahulu.")
     st.info("📤 Klik tombol 'Browse files' di pojok kanan atas untuk upload")
     st.stop()
 
-# ============================================================
-# SIAPKAN DATA UNTUK DITAMPILKAN
-# ============================================================
 df_display = df_db.copy()
 
 # ============================================================
@@ -323,7 +304,7 @@ tab1, tab2, tab3 = st.tabs(["📂 TIKET OPEN", "📁 TIKET CLOSE", "📥 DOWNLOA
 
 with tab1:
     # ========================================================
-    # METRIKS RINGKASAN DI DALAM TAB TIKET OPEN
+    # METRIKS RINGKASAN
     # ========================================================
     df_open = df_display[df_display["IS_ACTIVE"] == True].copy() if "IS_ACTIVE" in df_display.columns else df_display.copy()
     
@@ -350,69 +331,37 @@ with tab1:
     st.markdown("---")
     
     # ========================================================
-    # JAVASCRIPT UNTUK HANDLE KLIK DAN COPY
+    # FILTER
     # ========================================================
-    st.markdown("""
-    <style>
-    /* Styling untuk baris tabel agar terlihat clickable */
-    .stDataFrame [data-testid="StyledDataFrameDataRow"] {
-        cursor: pointer;
-    }
-    .stDataFrame [data-testid="StyledDataFrameDataRow"]:hover {
-        background-color: rgba(128, 128, 128, 0.1);
-    }
-    </style>
-    
-    <script>
-    // Fungsi global untuk copy ke clipboard
-    window.copyToClipboard = function(text) {
-        navigator.clipboard.writeText(text).then(function() {
-            // Trigger event untuk Streamlit
-            const event = new Event('copy-success');
-            window.dispatchEvent(event);
-        });
-    }
-    </script>
-    """, unsafe_allow_html=True)
-    
-    # ========================================================
-    # FILTER DAN KOTAK KALIMAT
-    # ========================================================
-    col_filter1, col_filter2, col_filter3 = st.columns([2, 3, 1])
+    col_filter1, col_filter2 = st.columns([1, 3])
     
     with col_filter1:
         cari_incident_open = st.text_input("🔎 Cari Incident", placeholder="Ketik nomor INC...", key="cari_open")
     
-    with col_filter2:
-        # Kotak untuk menampilkan kalimat hasil generate
+    # ========================================================
+    # KOTAK KALIMAT DAN TOMBOL COPY
+    # ========================================================
+    st.markdown("### 📝 Kalimat untuk Chat Teknisi")
+    col_kalimat1, col_kalimat2 = st.columns([5, 1])
+    
+    with col_kalimat1:
         if 'selected_kalimat' not in st.session_state:
             st.session_state.selected_kalimat = ""
         
         kalimat_text = st.text_area(
-            "📝 Kalimat",
+            "Kalimat",
             value=st.session_state.selected_kalimat,
             height=100,
             key="kalimat_area",
             label_visibility="collapsed",
-            placeholder="Klik salah satu baris untuk generate kalimat..."
+            placeholder="Klik tombol '📋 Pilih' di samping untuk generate kalimat..."
         )
     
-    with col_filter3:
-        # Tombol copy
-        col_copy1, col_copy2 = st.columns([1, 1])
-        with col_copy1:
-            copy_button = st.button("📋 Copy", key="copy_btn", use_container_width=True)
-        with col_copy2:
-            st.write("")  # Spacer
-        
+    with col_kalimat2:
+        copy_button = st.button("📋 Copy", key="copy_btn", use_container_width=True)
         if copy_button and st.session_state.selected_kalimat:
-            # Gunakan JavaScript untuk copy
-            st.markdown(f"""
-            <script>
-            navigator.clipboard.writeText(`{st.session_state.selected_kalimat}`);
-            </script>
-            """, unsafe_allow_html=True)
-            st.success("✅ Tersalin!")
+            st.code(st.session_state.selected_kalimat, language="text")
+            st.success("✅ Kalimat siap di-copy! (Tekan Ctrl+C)")
     
     # ========================================================
     # FILTER DATA
@@ -428,17 +377,11 @@ with tab1:
     tabel_open = []
     
     for idx, row in df_open_filtered.iterrows():
-        # Format TTR CUSTOMER
         ttr_formatted = format_ttr(row.get("TTR CUSTOMER"))
-        
-        # Format LAST UPDATE WORKLOG
         last_update_formatted = format_last_update(row.get("LAST UPDATE WORKLOG"))
         
-        # Ambil SERVICE ID dan WORKLOG untuk kalimat
         service_id = row.get("SERVICE ID", "-")
         worklog = row.get("WORKLOG SUMMARY", "-")
-        
-        # Buat kalimat
         kalimat = buat_kalimat(service_id, worklog)
         
         tabel_open.append({
@@ -450,87 +393,44 @@ with tab1:
             "TTR CUSTOMER": ttr_formatted,
             "WORKLOG SUMMARY": row.get("WORKLOG SUMMARY", "-"),
             "LAST UPDATE WORKLOG": last_update_formatted,
-            "_KALIMAT": kalimat,  # Kolom tersembunyi untuk generate kalimat
-            "_SERVICE_ID": service_id,
-            "_WORKLOG": worklog
+            "_KALIMAT": kalimat,
+            "_IDX": idx
         })
     
     df_tabel_open = pd.DataFrame(tabel_open)
     
     # ========================================================
-    # TAMPILKAN TABEL
+    # TAMPILKAN TABEL DENGAN TOMBOL DI SETIAP BARIS
     # ========================================================
     if df_tabel_open.empty:
         st.info("Tidak ada tiket open")
     else:
-        # Pilih kolom yang akan ditampilkan (tanpa _KALIMAT)
-        kolom_tampil = ["NO", "INCIDENT", "LAYANAN", "SERVICE ID", "WITEL", "TTR CUSTOMER", "WORKLOG SUMMARY", "LAST UPDATE WORKLOG"]
+        st.markdown("### 📋 Daftar Tiket Open")
+        st.caption("💡 Klik tombol 📋 di kolom 'Pilih' untuk generate kalimat")
         
-        # Tampilkan dataframe
-        st.dataframe(
-            df_tabel_open[kolom_tampil],
-            use_container_width=True,
-            hide_index=True,
-            height=400,
-            column_config={
-                "NO": st.column_config.NumberColumn(
-                    "NO",
-                    width="small"
-                ),
-                "INCIDENT": st.column_config.TextColumn(
-                    "INCIDENT",
-                    width="medium"
-                ),
-                "LAYANAN": st.column_config.TextColumn(
-                    "LAYANAN",
-                    width="small"
-                ),
-                "SERVICE ID": st.column_config.TextColumn(
-                    "SERVICE ID",
-                    width="medium"
-                ),
-                "WITEL": st.column_config.TextColumn(
-                    "WITEL",
-                    width="small"
-                ),
-                "TTR CUSTOMER": st.column_config.TextColumn(
-                    "TTR CUSTOMER",
-                    width="small"
-                ),
-                "WORKLOG SUMMARY": st.column_config.TextColumn(
-                    "WORKLOG SUMMARY",
-                    width="large"
-                ),
-                "LAST UPDATE WORKLOG": st.column_config.TextColumn(
-                    "LAST UPDATE",
-                    width="small"
-                )
-            }
-        )
-        
-        # ========================================================
-        # INTERAKSI KLIK BARIS (MENGGUNAKAN BUTTON UNTUK SETIAP BARIS)
-        # ========================================================
-        st.markdown("### Pilih Baris untuk Generate Kalimat:")
-        
-        # Buat kolom-kolom kecil untuk tombol
-        cols = st.columns(5)
-        for i in range(min(20, len(df_tabel_open))):  # Tampilkan maksimal 20 tombol
-            row_idx = i
-            with cols[i % 5]:
-                btn_label = f"{df_tabel_open.iloc[row_idx]['NO']}. {df_tabel_open.iloc[row_idx]['SERVICE ID']}"
-                if st.button(btn_label, key=f"row_btn_{row_idx}"):
-                    kalimat_terpilih = df_tabel_open.iloc[row_idx]['_KALIMAT']
-                    st.session_state.selected_kalimat = kalimat_terpilih
+        # Tampilkan tabel dengan kolom tambahan untuk tombol
+        for idx, row in df_tabel_open.iterrows():
+            with st.container():
+                cols = st.columns([0.5, 1, 1, 1.5, 1, 1, 2, 1.5, 0.5])
+                
+                cols[0].write(f"**{row['NO']}**")
+                cols[1].write(row['INCIDENT'])
+                cols[2].write(row['LAYANAN'])
+                cols[3].write(row['SERVICE ID'])
+                cols[4].write(row['WITEL'])
+                cols[5].write(row['TTR CUSTOMER'])
+                cols[6].write(str(row['WORKLOG SUMMARY'])[:50] + "..." if len(str(row['WORKLOG SUMMARY'])) > 50 else row['WORKLOG SUMMARY'])
+                cols[7].write(row['LAST UPDATE WORKLOG'])
+                
+                if cols[8].button("📋", key=f"select_{row['_IDX']}_{idx}", help="Pilih untuk generate kalimat"):
+                    st.session_state.selected_kalimat = row['_KALIMAT']
                     st.rerun()
-        
-        # Alternatif: Instruksi untuk klik langsung (jika button terlalu banyak)
-        st.caption("💡 Klik tombol nomor di atas untuk generate kalimat, atau gunakan filter untuk mempersempit pencarian")
+            
+            st.markdown("---")
 
 with tab2:
     st.subheader("🔍 Tiket Close (Status Tidak Aktif)")
     
-    # FILTER UNTUK TAB CLOSE
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1:
         if "WITEL" in df_display.columns:
@@ -549,7 +449,6 @@ with tab2:
     with col_f3:
         cari_incident_close = st.text_input("🔎 Cari INCIDENT", placeholder="Ketik nomor INC...", key="cari_close")
     
-    # Filter data untuk tiket CLOSE
     df_close = df_display[df_display["IS_ACTIVE"] == False].copy() if "IS_ACTIVE" in df_display.columns else pd.DataFrame()
     
     if not df_close.empty:
@@ -560,7 +459,6 @@ with tab2:
         if cari_incident_close and "INCIDENT" in df_close.columns:
             df_close = df_close[df_close["INCIDENT"].astype(str).str.contains(cari_incident_close, case=False, na=False)]
     
-    # Tampilkan tabel tiket CLOSE
     kolom_tampil_close = ["INCIDENT", "STATUS", "WITEL", "REPORTED DATE", "SUMMARY", "LAYANAN"]
     kolom_tampil_close = [k for k in kolom_tampil_close if k in df_close.columns]
     
@@ -577,11 +475,9 @@ with tab2:
 with tab3:
     st.subheader("📥 Download Tiket (Semua Kolom)")
     
-    # FILTER UNTUK TAB DOWNLOAD
     col_d1, col_d2, col_d3, col_d4 = st.columns(4)
     
     with col_d1:
-        # Filter Tanggal Mulai
         if "REPORTED DATE" in df_display.columns:
             df_temp = df_display.copy()
             df_temp["REPORTED DATE"] = pd.to_datetime(df_temp["REPORTED DATE"])
@@ -611,10 +507,8 @@ with tab3:
         else:
             pilih_layanan_download = []
     
-    # Filter data untuk download
     df_download = df_db.copy()
     
-    # Terapkan filter tanggal
     if "REPORTED DATE" in df_download.columns and tgl_mulai and tgl_akhir:
         df_download["REPORTED DATE"] = pd.to_datetime(df_download["REPORTED DATE"])
         mask_tanggal = (df_download["REPORTED DATE"].dt.date >= tgl_mulai) & (df_download["REPORTED DATE"].dt.date <= tgl_akhir)
