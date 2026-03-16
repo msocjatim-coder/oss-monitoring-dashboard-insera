@@ -168,24 +168,6 @@ def format_last_update(date_str):
         return str(date_str)
 
 # ============================================================
-# FUNGSI MEMBUAT KALIMAT
-# ============================================================
-def buat_kalimat(service_id, worklog):
-    """
-    Membuat kalimat dengan format:
-    SERVICE ID
-    Progres sebelumnya : isi WORKLOG SUMMARY
-    Mohon dibantu updatenya kembali 🙏
-    """
-    service_id = str(service_id) if service_id and str(service_id) != "nan" else "-"
-    worklog = str(worklog) if worklog and str(worklog) != "nan" else "-"
-    
-    worklog = worklog.replace("\n", " ").replace("\r", " ").strip()
-    
-    kalimat = f"{service_id}\nProgres sebelumnya : {worklog}\nMohon dibantu updatenya kembali 🙏"
-    return kalimat
-
-# ============================================================
 # FUNGSI MEMPROSES DATA
 # ============================================================
 def process_data(df):
@@ -339,31 +321,6 @@ with tab1:
         cari_incident_open = st.text_input("🔎 Cari Incident", placeholder="Ketik nomor INC...", key="cari_open")
     
     # ========================================================
-    # KOTAK KALIMAT DAN TOMBOL COPY
-    # ========================================================
-    st.markdown("### 📝 Kalimat untuk Chat Teknisi")
-    col_kalimat1, col_kalimat2 = st.columns([5, 1])
-    
-    with col_kalimat1:
-        if 'selected_kalimat' not in st.session_state:
-            st.session_state.selected_kalimat = ""
-        
-        kalimat_text = st.text_area(
-            "Kalimat",
-            value=st.session_state.selected_kalimat,
-            height=100,
-            key="kalimat_area",
-            label_visibility="collapsed",
-            placeholder="Klik tombol '📋 Pilih' di samping untuk generate kalimat..."
-        )
-    
-    with col_kalimat2:
-        copy_button = st.button("📋 Copy", key="copy_btn", use_container_width=True)
-        if copy_button and st.session_state.selected_kalimat:
-            st.code(st.session_state.selected_kalimat, language="text")
-            st.success("✅ Kalimat siap di-copy! (Tekan Ctrl+C)")
-    
-    # ========================================================
     # FILTER DATA
     # ========================================================
     df_open_filtered = df_open.copy()
@@ -380,53 +337,43 @@ with tab1:
         ttr_formatted = format_ttr(row.get("TTR CUSTOMER"))
         last_update_formatted = format_last_update(row.get("LAST UPDATE WORKLOG"))
         
-        service_id = row.get("SERVICE ID", "-")
-        worklog = row.get("WORKLOG SUMMARY", "-")
-        kalimat = buat_kalimat(service_id, worklog)
-        
         tabel_open.append({
             "NO": len(tabel_open) + 1,
             "INCIDENT": row.get("INCIDENT", "-"),
             "LAYANAN": row.get("LAYANAN", "-"),
-            "SERVICE ID": service_id,
+            "SERVICE ID": row.get("SERVICE ID", "-"),
             "WITEL": row.get("WITEL", "-"),
             "TTR CUSTOMER": ttr_formatted,
             "WORKLOG SUMMARY": row.get("WORKLOG SUMMARY", "-"),
-            "LAST UPDATE WORKLOG": last_update_formatted,
-            "_KALIMAT": kalimat,
-            "_IDX": idx
+            "LAST UPDATE WORKLOG": last_update_formatted
         })
     
     df_tabel_open = pd.DataFrame(tabel_open)
     
     # ========================================================
-    # TAMPILKAN TABEL DENGAN TOMBOL DI SETIAP BARIS
+    # TAMPILKAN TABEL
     # ========================================================
     if df_tabel_open.empty:
         st.info("Tidak ada tiket open")
     else:
-        st.markdown("### 📋 Daftar Tiket Open")
-        st.caption("💡 Klik tombol 📋 di kolom 'Pilih' untuk generate kalimat")
+        st.dataframe(
+            df_tabel_open,
+            use_container_width=True,
+            hide_index=True,
+            height=500,
+            column_config={
+                "NO": st.column_config.NumberColumn("NO", width="small"),
+                "INCIDENT": st.column_config.TextColumn("INCIDENT", width="medium"),
+                "LAYANAN": st.column_config.TextColumn("LAYANAN", width="small"),
+                "SERVICE ID": st.column_config.TextColumn("SERVICE ID", width="medium"),
+                "WITEL": st.column_config.TextColumn("WITEL", width="small"),
+                "TTR CUSTOMER": st.column_config.TextColumn("TTR CUSTOMER", width="small"),
+                "WORKLOG SUMMARY": st.column_config.TextColumn("WORKLOG SUMMARY", width="large"),
+                "LAST UPDATE WORKLOG": st.column_config.TextColumn("LAST UPDATE", width="small")
+            }
+        )
         
-        # Tampilkan tabel dengan kolom tambahan untuk tombol
-        for idx, row in df_tabel_open.iterrows():
-            with st.container():
-                cols = st.columns([0.5, 1, 1, 1.5, 1, 1, 2, 1.5, 0.5])
-                
-                cols[0].write(f"**{row['NO']}**")
-                cols[1].write(row['INCIDENT'])
-                cols[2].write(row['LAYANAN'])
-                cols[3].write(row['SERVICE ID'])
-                cols[4].write(row['WITEL'])
-                cols[5].write(row['TTR CUSTOMER'])
-                cols[6].write(str(row['WORKLOG SUMMARY'])[:50] + "..." if len(str(row['WORKLOG SUMMARY'])) > 50 else row['WORKLOG SUMMARY'])
-                cols[7].write(row['LAST UPDATE WORKLOG'])
-                
-                if cols[8].button("📋", key=f"select_{row['_IDX']}_{idx}", help="Pilih untuk generate kalimat"):
-                    st.session_state.selected_kalimat = row['_KALIMAT']
-                    st.rerun()
-            
-            st.markdown("---")
+        st.caption(f"Menampilkan {len(df_tabel_open)} tiket open")
 
 with tab2:
     st.subheader("🔍 Tiket Close (Status Tidak Aktif)")
