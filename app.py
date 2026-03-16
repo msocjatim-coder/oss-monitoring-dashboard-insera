@@ -359,11 +359,18 @@ with tab1:
     # ========================================================
     df_open = df_display[df_display["IS_ACTIVE"] == True].copy() if "IS_ACTIVE" in df_display.columns else df_display.copy()
     
-    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+    # Hitung severity counts
+    severity_counts = {}
+    if "SEVERITY" in df_open.columns:
+        for sev in ["PREMIUM", "CRITICAL", "MAJOR", "MINOR", "LOW"]:
+            severity_counts[sev] = len(df_open[df_open["SEVERITY"] == sev])
+    
+    # Tampilkan metrik dalam 5 kolom
+    col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
     
     with col_m1:
         total_tiket_open = len(df_open)
-        st.metric("📋 TOTAL TIKET OPEN", f"{total_tiket_open}")
+        st.metric("📋 TOTAL TIKET", f"{total_tiket_open}")
     
     with col_m2:
         if "LAYANAN" in df_open.columns:
@@ -374,23 +381,32 @@ with tab1:
             st.metric("📊 LAYANAN", "N/A")
     
     with col_m3:
-        # METRIK SEVERITY - jumlah tiket berdasarkan severity
-        if "SEVERITY" in df_open.columns:
-            severity_counts = df_open["SEVERITY"].value_counts()
-            # Prioritaskan menampilkan CRITICAL dulu
-            critical_count = severity_counts.get("CRITICAL", 0)
-            major_count = severity_counts.get("MAJOR", 0)
-            st.metric("⚠️ KRITIS", f"{critical_count}", f"Major: {major_count}")
-        else:
-            st.metric("⚠️ SEVERITY", "-")
+        # PREMIUM
+        st.metric("🔴 PREMIUM", severity_counts.get("PREMIUM", 0))
     
     with col_m4:
-        # METRIK IMPACT - total site terdampak
-        if "IMPACT" in df_open.columns:
-            total_impact = df_open["IMPACT"].sum()
-            st.metric("🏢 TOTAL SITE", f"{total_impact}")
-        else:
-            st.metric("🏢 TOTAL SITE", "-")
+        # CRITICAL
+        st.metric("🔥 CRITICAL", severity_counts.get("CRITICAL", 0))
+    
+    with col_m5:
+        # MAJOR
+        st.metric("⚠️ MAJOR", severity_counts.get("MAJOR", 0))
+    
+    col_m6, col_m7, col_m8, col_m9 = st.columns(4)
+    
+    with col_m6:
+        # MINOR
+        st.metric("🔹 MINOR", severity_counts.get("MINOR", 0))
+    
+    with col_m7:
+        # LOW
+        st.metric("🟢 LOW", severity_counts.get("LOW", 0))
+    
+    with col_m8:
+        st.metric(" ", " ")
+    
+    with col_m9:
+        st.metric(" ", " ")
     
     st.markdown("---")
     
