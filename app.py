@@ -646,21 +646,21 @@ with tab2:
     # FILTER UNTUK TIKET CLOSE
     # ========================================================
     col_f1, col_f2, col_f3 = st.columns(3)
-    with col_f1:
+    with col_f2:
         if "WITEL" in df_display.columns:
             semua_witel = sorted(df_display["WITEL"].dropna().unique())
             pilih_witel_close = st.multiselect("Pilih WITEL", semua_witel, default=[], key="witel_close")
         else:
             pilih_witel_close = []
     
-    with col_f2:
+    with col_f3:
         if "CAUSE" in df_display.columns:
             semua_cause = sorted(df_display["CAUSE"].dropna().unique())
             pilih_cause = st.multiselect("Filter CAUSE", semua_cause, default=[], key="cause_filter")
         else:
             pilih_cause = []
     
-    with col_f3:
+    with col_f1:
         cari_incident_close = st.text_input("🔎 Cari INCIDENT", placeholder="Ketik nomor INC...", key="cari_close")
     
     # ========================================================
@@ -808,3 +808,4 @@ with tab3:
 st.markdown("---")
 wib_time = datetime.now(ZoneInfo("Asia/Jakarta")).strftime("%H:%M")
 st.caption(f"🔄 Auto-refresh setiap 10 detik | Data terakhir diperbarui pukul {wib_time} WIB")
+
