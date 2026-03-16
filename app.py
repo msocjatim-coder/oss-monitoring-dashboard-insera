@@ -421,7 +421,7 @@ tab1, tab2, tab3 = st.tabs(["📂 TIKET OPEN", "📁 TIKET CLOSE", "📥 DOWNLOA
 
 with tab1:
     # ========================================================
-    # METRIKS RINGKASAN (DALAM 1 BARIS)
+    # METRIKS RINGKASAN (1 BARIS)
     # ========================================================
     df_open = df_display[df_display["IS_ACTIVE"] == True].copy() if "IS_ACTIVE" in df_display.columns else df_display.copy()
     
@@ -499,7 +499,7 @@ with tab1:
         df_open_filtered = df_open_filtered[df_open_filtered["WITEL"].isin(pilih_witel)]
     
     # ========================================================
-    # SIAPKAN DATA UNTUK TABEL
+    # SIAPKAN DATA UNTUK TABEL (KEMBALIKAN KE FORMAT SEDERHANA)
     # ========================================================
     tabel_open = []
     
@@ -507,25 +507,12 @@ with tab1:
         ttr_formatted = format_ttr(row.get("TTR CUSTOMER"))
         last_update_formatted = format_last_update(row.get("LAST UPDATE WORKLOG"))
         
-        # Tentukan class severity untuk warna
-        severity_class = ""
-        if row.get("SEVERITY") == "PREMIUM":
-            severity_class = "severity-premium"
-        elif row.get("SEVERITY") == "CRITICAL":
-            severity_class = "severity-critical"
-        elif row.get("SEVERITY") == "MAJOR":
-            severity_class = "severity-major"
-        elif row.get("SEVERITY") == "MINOR":
-            severity_class = "severity-minor"
-        elif row.get("SEVERITY") == "LOW":
-            severity_class = "severity-low"
-        
         tabel_open.append({
             "NO": len(tabel_open) + 1,
             "INCIDENT": row.get("INCIDENT", "-"),
             "LAYANAN": row.get("LAYANAN", "-"),
             "SERVICE ID": row.get("SERVICE ID", "-"),
-            "SEVERITY": f'<span class="{severity_class}">{row.get("SEVERITY", "-")}</span>',
+            "SEVERITY": row.get("SEVERITY", "-"),
             "IMPACT": row.get("IMPACT", 1),
             "WITEL": row.get("WITEL", "-"),
             "TTR CUSTOMER": ttr_formatted,
@@ -536,25 +523,31 @@ with tab1:
     df_tabel_open = pd.DataFrame(tabel_open)
     
     # ========================================================
-    # TAMPILKAN TABEL (HANYA DATA YANG ADA)
+    # TAMPILKAN TABEL DENGAN ST.DATAFRAME (SEDERHANA)
     # ========================================================
     if df_tabel_open.empty:
         st.info("Tidak ada tiket open")
     else:
-        st.write("### 📋 Daftar Tiket Open")
+        st.dataframe(
+            df_tabel_open,
+            use_container_width=True,
+            hide_index=True,
+            height=500,
+            column_config={
+                "NO": st.column_config.NumberColumn("NO", width="small"),
+                "INCIDENT": st.column_config.TextColumn("INCIDENT", width="medium"),
+                "LAYANAN": st.column_config.TextColumn("LAYANAN", width="small"),
+                "SERVICE ID": st.column_config.TextColumn("SERVICE ID", width="medium"),
+                "SEVERITY": st.column_config.TextColumn("SEVERITY", width="small"),
+                "IMPACT": st.column_config.NumberColumn("IMPACT", width="small"),
+                "WITEL": st.column_config.TextColumn("WITEL", width="small"),
+                "TTR CUSTOMER": st.column_config.TextColumn("TTR CUSTOMER", width="small"),
+                "WORKLOG SUMMARY": st.column_config.TextColumn("WORKLOG SUMMARY", width="large"),
+                "LAST UPDATE WORKLOG": st.column_config.TextColumn("LAST UPDATE", width="small")
+            }
+        )
         
-        # Tampilkan tabel dengan HTML untuk warna
-        for idx, row in df_tabel_open.iterrows():
-            cols = st.columns([0.5, 1.5, 0.8, 1.5, 1, 0.5, 1, 1.5, 1.5, 1])
-            
-            cols[0].write(f"**{row['NO']}**")
-            cols[1].write(row['INCIDENT'])
-            cols[2].write(row['LAYANAN'])
-            cols[3].write(row['SERVICE ID'])
-            cols[4].markdown(row['SEVERITY'], unsafe_allow_html=True)
-            cols[5].write(row['IMPACT'])
-            cols[6].write(row['WITEL'])
-            cols[7].write(row['TTR CUSTOMER'])
+        st.caption(f"Menampilkan {len(df_tabel_open)} tiket open")
             
             # WORKLOG SUMMARY dengan wrap text
             worklog = str(row['WORKLOG SUMMARY'])
@@ -699,3 +692,4 @@ with tab3:
 st.markdown("---")
 wib_time = datetime.now(ZoneInfo("Asia/Jakarta")).strftime("%H:%M")
 st.caption(f"🔄 Auto-refresh setiap 10 detik | Data terakhir diperbarui pukul {wib_time} WIB")
+
