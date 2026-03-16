@@ -19,7 +19,7 @@ st.set_page_config(
 )
 
 # ============================================================
-# AUTO REFRESH (SETIAP 10 DETIK) - INI YANG DIPERBAIKI!
+# AUTO REFRESH (SETIAP 10 DETIK)
 # ============================================================
 st_autorefresh(interval=10000, limit=None, key="autorefresh-10detik")
 
@@ -170,7 +170,6 @@ col1, col2 = st.columns([8, 2])
 
 with col1:
     st.title("📊 OSS Monitoring Dashboard")
-    st.caption("Auto-refresh setiap 10 detik | Data otomatis ke Google Sheet")
 
 with col2:
     uploaded_files = st.file_uploader(
@@ -266,102 +265,180 @@ with col4:
 st.markdown("---")
 
 # ============================================================
-# FILTER
+# KOLOM YANG AKAN DITAMPILKAN DI TABEL TIKET OPEN DAN CLOSE
 # ============================================================
-with st.expander("🔍 Filter Data", expanded=True):
-    col1, col2, col3 = st.columns(3)
+kolom_tampil = ["INCIDENT", "STATUS", "WITEL", "REPORTED DATE", "SUMMARY", "LAYANAN", "UMUR_TIKET_HARI"]
+kolom_tampil = [k for k in kolom_tampil if k in df_display.columns]
+
+# ============================================================
+# MEMBUAT 3 TAB MENU
+# ============================================================
+tab1, tab2, tab3 = st.tabs(["📂 TIKET OPEN", "📁 TIKET CLOSE", "📥 DOWNLOAD TIKET"])
+
+with tab1:
+    st.subheader("🔍 Tiket Open (Status Aktif)")
     
-    with col1:
+    # FILTER UNTUK TAB OPEN
+    col_f1, col_f2, col_f3 = st.columns(3)
+    with col_f1:
         if "WITEL" in df_display.columns:
             semua_witel = sorted(df_display["WITEL"].dropna().unique())
-            pilih_witel = st.multiselect("Pilih WITEL", semua_witel, default=[])
+            pilih_witel_open = st.multiselect("Pilih WITEL", semua_witel, default=[], key="witel_open")
         else:
-            pilih_witel = []
+            pilih_witel_open = []
     
-    with col2:
-        if "STATUS" in df_display.columns:
-            semua_status = sorted(df_display["STATUS"].dropna().unique())
-            pilih_status = st.multiselect("Pilih STATUS", semua_status, default=[])
-        else:
-            pilih_status = []
-    
-    with col3:
+    with col_f2:
         if "LAYANAN" in df_display.columns:
             semua_layanan = sorted(df_display["LAYANAN"].unique())
-            pilih_layanan = st.multiselect("Pilih LAYANAN", semua_layanan, default=[])
+            pilih_layanan_open = st.multiselect("Pilih LAYANAN", semua_layanan, default=[], key="layanan_open")
         else:
-            pilih_layanan = []
+            pilih_layanan_open = []
     
-    cari_incident = st.text_input("🔎 Cari INCIDENT", placeholder="Ketik nomor INC...")
-
-# Terapkan filter
-df_filtered = df_display.copy()
-
-if pilih_witel and "WITEL" in df_filtered.columns:
-    df_filtered = df_filtered[df_filtered["WITEL"].isin(pilih_witel)]
-if pilih_status and "STATUS" in df_filtered.columns:
-    df_filtered = df_filtered[df_filtered["STATUS"].isin(pilih_status)]
-if pilih_layanan and "LAYANAN" in df_filtered.columns:
-    df_filtered = df_filtered[df_filtered["LAYANAN"].isin(pilih_layanan)]
-if cari_incident and "INCIDENT" in df_filtered.columns:
-    df_filtered = df_filtered[df_filtered["INCIDENT"].astype(str).str.contains(cari_incident, case=False, na=False)]
-
-# ============================================================
-# TABEL DATA
-# ============================================================
-st.subheader(f"📋 Data Tiket ({len(df_filtered)} dari {len(df_display)})")
-
-# Kolom yang ditampilkan
-kolom_tampil = ["INCIDENT", "STATUS", "WITEL", "REPORTED DATE", "SUMMARY", "LAYANAN", "UMUR_TIKET_HARI"]
-kolom_tampil = [k for k in kolom_tampil if k in df_filtered.columns]
-
-st.dataframe(
-    df_filtered[kolom_tampil],
-    use_container_width=True,
-    hide_index=True
-)
-
-# ============================================================
-# STATISTIK
-# ============================================================
-with st.expander("📈 Statistik Lengkap", expanded=False):
+    with col_f3:
+        cari_incident_open = st.text_input("🔎 Cari INCIDENT", placeholder="Ketik nomor INC...", key="cari_open")
     
-    if "WITEL" in df_filtered.columns:
-        st.subheader("Tiket per WITEL")
-        witel_stats = df_filtered["WITEL"].value_counts().reset_index()
-        witel_stats.columns = ["WITEL", "JUMLAH"]
-        st.dataframe(witel_stats, use_container_width=True, hide_index=True)
+    # Filter data untuk tiket OPEN
+    df_open = df_display[df_display["IS_ACTIVE"] == True].copy() if "IS_ACTIVE" in df_display.columns else df_display.copy()
     
-    if "STATUS" in df_filtered.columns:
-        st.subheader("Tiket per STATUS")
-        status_stats = df_filtered["STATUS"].value_counts().reset_index()
-        status_stats.columns = ["STATUS", "JUMLAH"]
-        st.dataframe(status_stats, use_container_width=True, hide_index=True)
+    if pilih_witel_open and "WITEL" in df_open.columns:
+        df_open = df_open[df_open["WITEL"].isin(pilih_witel_open)]
+    if pilih_layanan_open and "LAYANAN" in df_open.columns:
+        df_open = df_open[df_open["LAYANAN"].isin(pilih_layanan_open)]
+    if cari_incident_open and "INCIDENT" in df_open.columns:
+        df_open = df_open[df_open["INCIDENT"].astype(str).str.contains(cari_incident_open, case=False, na=False)]
+    
+    # Tampilkan tabel tiket OPEN
+    if df_open.empty:
+        st.info("Tidak ada tiket open")
+    else:
+        st.dataframe(
+            df_open[kolom_tampil],
+            use_container_width=True,
+            hide_index=True
+        )
+        st.caption(f"Menampilkan {len(df_open)} tiket open")
 
-# ============================================================
-# DOWNLOAD DATA
-# ============================================================
-st.markdown("---")
-col1, col2 = st.columns(2)
+with tab2:
+    st.subheader("🔍 Tiket Close (Status Tidak Aktif)")
+    
+    # FILTER UNTUK TAB CLOSE
+    col_f1, col_f2, col_f3 = st.columns(3)
+    with col_f1:
+        if "WITEL" in df_display.columns:
+            semua_witel = sorted(df_display["WITEL"].dropna().unique())
+            pilih_witel_close = st.multiselect("Pilih WITEL", semua_witel, default=[], key="witel_close")
+        else:
+            pilih_witel_close = []
+    
+    with col_f2:
+        if "LAYANAN" in df_display.columns:
+            semua_layanan = sorted(df_display["LAYANAN"].unique())
+            pilih_layanan_close = st.multiselect("Pilih LAYANAN", semua_layanan, default=[], key="layanan_close")
+        else:
+            pilih_layanan_close = []
+    
+    with col_f3:
+        cari_incident_close = st.text_input("🔎 Cari INCIDENT", placeholder="Ketik nomor INC...", key="cari_close")
+    
+    # Filter data untuk tiket CLOSE
+    df_close = df_display[df_display["IS_ACTIVE"] == False].copy() if "IS_ACTIVE" in df_display.columns else pd.DataFrame()
+    
+    if not df_close.empty:
+        if pilih_witel_close and "WITEL" in df_close.columns:
+            df_close = df_close[df_close["WITEL"].isin(pilih_witel_close)]
+        if pilih_layanan_close and "LAYANAN" in df_close.columns:
+            df_close = df_close[df_close["LAYANAN"].isin(pilih_layanan_close)]
+        if cari_incident_close and "INCIDENT" in df_close.columns:
+            df_close = df_close[df_close["INCIDENT"].astype(str).str.contains(cari_incident_close, case=False, na=False)]
+    
+    # Tampilkan tabel tiket CLOSE
+    if df_close.empty:
+        st.info("Tidak ada tiket close")
+    else:
+        st.dataframe(
+            df_close[kolom_tampil],
+            use_container_width=True,
+            hide_index=True
+        )
+        st.caption(f"Menampilkan {len(df_close)} tiket close")
 
-with col1:
-    csv_all = df_display.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        label="📥 Download Semua Data",
-        data=csv_all,
-        file_name=f"oss_data_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-        mime="text/csv",
-        use_container_width=True
-    )
-
-with col2:
-    if "IS_ACTIVE" in df_display.columns:
-        df_aktif = df_display[df_display["IS_ACTIVE"] == True].copy()
-        csv_active = df_aktif.to_csv(index=False).encode("utf-8")
+with tab3:
+    st.subheader("📥 Download Tiket (Semua Kolom)")
+    
+    # FILTER UNTUK TAB DOWNLOAD
+    col_d1, col_d2, col_d3, col_d4 = st.columns(4)
+    
+    with col_d1:
+        # Filter Tanggal Mulai
+        if "REPORTED DATE" in df_display.columns:
+            # Konversi ke datetime untuk mengambil min/max
+            df_temp = df_display.copy()
+            df_temp["REPORTED DATE"] = pd.to_datetime(df_temp["REPORTED DATE"])
+            min_date = df_temp["REPORTED DATE"].min().date()
+            max_date = df_temp["REPORTED DATE"].max().date()
+            tgl_mulai = st.date_input("Dari Tanggal", min_date, key="tgl_mulai")
+        else:
+            tgl_mulai = None
+    
+    with col_d2:
+        # Filter Tanggal Akhir
+        if "REPORTED DATE" in df_display.columns:
+            tgl_akhir = st.date_input("Sampai Tanggal", max_date, key="tgl_akhir")
+        else:
+            tgl_akhir = None
+    
+    with col_d3:
+        # Filter WITEL
+        if "WITEL" in df_display.columns:
+            semua_witel = sorted(df_display["WITEL"].dropna().unique())
+            pilih_witel_download = st.multiselect("Pilih WITEL", semua_witel, default=[], key="witel_download")
+        else:
+            pilih_witel_download = []
+    
+    with col_d4:
+        # Filter LAYANAN
+        if "LAYANAN" in df_display.columns:
+            semua_layanan = sorted(df_display["LAYANAN"].unique())
+            pilih_layanan_download = st.multiselect("Pilih LAYANAN", semua_layanan, default=[], key="layanan_download")
+        else:
+            pilih_layanan_download = []
+    
+    # Filter data untuk download - gunakan data asli dari database (semua kolom)
+    df_download = df_db.copy()
+    
+    # Terapkan filter tanggal
+    if "REPORTED DATE" in df_download.columns and tgl_mulai and tgl_akhir:
+        df_download["REPORTED DATE"] = pd.to_datetime(df_download["REPORTED DATE"])
+        mask_tanggal = (df_download["REPORTED DATE"].dt.date >= tgl_mulai) & (df_download["REPORTED DATE"].dt.date <= tgl_akhir)
+        df_download = df_download[mask_tanggal]
+    
+    # Terapkan filter WITEL
+    if pilih_witel_download and "WITEL" in df_download.columns:
+        df_download = df_download[df_download["WITEL"].isin(pilih_witel_download)]
+    
+    # Terapkan filter LAYANAN
+    if pilih_layanan_download and "LAYANAN" in df_download.columns:
+        df_download = df_download[df_download["LAYANAN"].isin(pilih_layanan_download)]
+    
+    # Tampilkan jumlah data
+    st.caption(f"Menampilkan {len(df_download)} tiket")
+    
+    # Tampilkan dataframe dengan semua kolom
+    if df_download.empty:
+        st.info("Tidak ada data dengan filter yang dipilih")
+    else:
+        st.dataframe(
+            df_download,
+            use_container_width=True,
+            hide_index=True
+        )
+        
+        # Tombol download dengan semua kolom
+        csv_data = df_download.to_csv(index=False).encode("utf-8")
         st.download_button(
-            label="📥 Download Data Aktif",
-            data=csv_active,
-            file_name=f"oss_active_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            label="📥 Download Data Terfilter (Semua Kolom)",
+            data=csv_data,
+            file_name=f"oss_download_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
             mime="text/csv",
             use_container_width=True
         )
@@ -370,4 +447,5 @@ with col2:
 # FOOTER
 # ============================================================
 st.markdown("---")
-st.caption(f"🔄 Auto-refresh setiap 10 detik | Terakhir: {datetime.now().strftime('%H:%M:%S')}")
+wib_time = datetime.now(ZoneInfo("Asia/Jakarta")).strftime("%H:%M")
+st.caption(f"🔄 Auto-refresh setiap 10 detik | Data terakhir diperbarui pukul {wib_time} WIB")
