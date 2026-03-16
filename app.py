@@ -6,6 +6,7 @@ import os
 import time
 import re
 from streamlit_autorefresh import st_autorefresh
+import pyperclip  # Untuk copy ke clipboard (opsional)
 
 # Supabase
 from supabase import create_client
@@ -146,11 +147,11 @@ def format_ttr(ttr_value):
     return ttr_str
 
 # ============================================================
-# FUNGSI FORMAT LAST UPDATE WORKLOG
+# FUNGSI FORMAT LAST UPDATE WORKLOG (DIPERBAIKI)
 # ============================================================
 def format_last_update(date_str):
     """
-    Mengubah format 2026-03-01T10:28:22.498 menjadi "1 maret 10:28"
+    Mengubah format 2026-03-01T10:28:22.498 menjadi "01 Maret, Pukul 10:28"
     """
     if pd.isna(date_str) or date_str is None or date_str == "":
         return "-"
@@ -164,27 +165,29 @@ def format_last_update(date_str):
         else:
             dt = pd.to_datetime(date_str)
         
-        # Format: 1 maret 10:28
-        nama_bulan = ["januari", "februari", "maret", "april", "mei", "juni", 
-                      "juli", "agustus", "september", "oktober", "november", "desember"]
+        # Format: 01 Maret, Pukul 10:28
+        nama_bulan = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", 
+                      "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
         bulan = nama_bulan[dt.month - 1]
-        return f"{dt.day} {bulan} {dt.hour:02d}:{dt.minute:02d}"
+        return f"{dt.day:02d} {bulan}, Pukul {dt.hour:02d}:{dt.minute:02d}"
     except:
         return str(date_str)
 
 # ============================================================
 # FUNGSI MEMBUAT KALIMAT
 # ============================================================
-def buat_kalimat(row):
+def buat_kalimat(service_id, worklog):
     """
     Membuat kalimat dengan format:
-    SERVICE ID + Enter + Progres sebelumnya : + isi WORKLOG SUMMARY + Enter + Mohon dibantu updatenya kembali 🙏
+    SERVICE ID
+    Progres sebelumnya : isi WORKLOG SUMMARY
+    Mohon dibantu updatenya kembali 🙏
     """
-    service_id = row.get("SERVICE ID", "-") if pd.notna(row.get("SERVICE ID")) else "-"
-    worklog = row.get("WORKLOG SUMMARY", "-") if pd.notna(row.get("WORKLOG SUMMARY")) else "-"
+    service_id = str(service_id) if service_id and str(service_id) != "nan" else "-"
+    worklog = str(worklog) if worklog and str(worklog) != "nan" else "-"
     
     # Bersihkan worklog dari karakter aneh
-    worklog = str(worklog).replace("\n", " ").replace("\r", " ").strip()
+    worklog = worklog.replace("\n", " ").replace("\r", " ").strip()
     
     kalimat = f"{service_id}\nProgres sebelumnya : {worklog}\nMohon dibantu updatenya kembali 🙏"
     return kalimat
@@ -314,11 +317,6 @@ if df_db.empty:
 df_display = df_db.copy()
 
 # ============================================================
-# METRIKS RINGKASAN (DIPINDAHKAN KE DALAM TAB)
-# ============================================================
-# Kita tidak menampilkan metrik di sini, akan dipindah ke tab
-
-# ============================================================
 # MEMBUAT 3 TAB MENU
 # ============================================================
 tab1, tab2, tab3 = st.tabs(["📂 TIKET OPEN", "📁 TIKET CLOSE", "📥 DOWNLOAD TIKET"])
@@ -344,14 +342,38 @@ with tab1:
             st.metric("📊 LAYANAN", "N/A")
     
     with col_m3:
-        # Kosong atau bisa diisi dengan metrik lain
         st.metric(" ", " ")
     
     with col_m4:
-        # Kosong atau bisa diisi dengan metrik lain
         st.metric(" ", " ")
     
     st.markdown("---")
+    
+    # ========================================================
+    # JAVASCRIPT UNTUK HANDLE KLIK DAN COPY
+    # ========================================================
+    st.markdown("""
+    <style>
+    /* Styling untuk baris tabel agar terlihat clickable */
+    .stDataFrame [data-testid="StyledDataFrameDataRow"] {
+        cursor: pointer;
+    }
+    .stDataFrame [data-testid="StyledDataFrameDataRow"]:hover {
+        background-color: rgba(128, 128, 128, 0.1);
+    }
+    </style>
+    
+    <script>
+    // Fungsi global untuk copy ke clipboard
+    window.copyToClipboard = function(text) {
+        navigator.clipboard.writeText(text).then(function() {
+            // Trigger event untuk Streamlit
+            const event = new Event('copy-success');
+            window.dispatchEvent(event);
+        });
+    }
+    </script>
+    """, unsafe_allow_html=True)
     
     # ========================================================
     # FILTER DAN KOTAK KALIMAT
@@ -363,10 +385,13 @@ with tab1:
     
     with col_filter2:
         # Kotak untuk menampilkan kalimat hasil generate
+        if 'selected_kalimat' not in st.session_state:
+            st.session_state.selected_kalimat = ""
+        
         kalimat_text = st.text_area(
             "📝 Kalimat",
-            value="",
-            height=70,
+            value=st.session_state.selected_kalimat,
+            height=100,
             key="kalimat_area",
             label_visibility="collapsed",
             placeholder="Klik salah satu baris untuk generate kalimat..."
@@ -374,15 +399,20 @@ with tab1:
     
     with col_filter3:
         # Tombol copy
-        copy_button = st.button("📋 Copy", key="copy_btn", use_container_width=True)
-        if copy_button and kalimat_text:
-            st.write("✅ Tersalin!")
-            # Gunakan JavaScript untuk copy ke clipboard
+        col_copy1, col_copy2 = st.columns([1, 1])
+        with col_copy1:
+            copy_button = st.button("📋 Copy", key="copy_btn", use_container_width=True)
+        with col_copy2:
+            st.write("")  # Spacer
+        
+        if copy_button and st.session_state.selected_kalimat:
+            # Gunakan JavaScript untuk copy
             st.markdown(f"""
             <script>
-                navigator.clipboard.writeText(`{kalimat_text}`);
+            navigator.clipboard.writeText(`{st.session_state.selected_kalimat}`);
             </script>
             """, unsafe_allow_html=True)
+            st.success("✅ Tersalin!")
     
     # ========================================================
     # FILTER DATA
@@ -404,20 +434,25 @@ with tab1:
         # Format LAST UPDATE WORKLOG
         last_update_formatted = format_last_update(row.get("LAST UPDATE WORKLOG"))
         
-        # Buat kalimat untuk tombol generate
-        kalimat = buat_kalimat(row)
+        # Ambil SERVICE ID dan WORKLOG untuk kalimat
+        service_id = row.get("SERVICE ID", "-")
+        worklog = row.get("WORKLOG SUMMARY", "-")
+        
+        # Buat kalimat
+        kalimat = buat_kalimat(service_id, worklog)
         
         tabel_open.append({
             "NO": len(tabel_open) + 1,
             "INCIDENT": row.get("INCIDENT", "-"),
             "LAYANAN": row.get("LAYANAN", "-"),
-            "SERVICE ID": row.get("SERVICE ID", "-"),
+            "SERVICE ID": service_id,
             "WITEL": row.get("WITEL", "-"),
             "TTR CUSTOMER": ttr_formatted,
             "WORKLOG SUMMARY": row.get("WORKLOG SUMMARY", "-"),
             "LAST UPDATE WORKLOG": last_update_formatted,
             "_KALIMAT": kalimat,  # Kolom tersembunyi untuk generate kalimat
-            "_RAW_DATA": row  # Data mentah untuk akses lebih lanjut
+            "_SERVICE_ID": service_id,
+            "_WORKLOG": worklog
         })
     
     df_tabel_open = pd.DataFrame(tabel_open)
@@ -428,15 +463,15 @@ with tab1:
     if df_tabel_open.empty:
         st.info("Tidak ada tiket open")
     else:
-        # Pilih kolom yang akan ditampilkan (tanpa _KALIMAT dan _RAW_DATA)
+        # Pilih kolom yang akan ditampilkan (tanpa _KALIMAT)
         kolom_tampil = ["NO", "INCIDENT", "LAYANAN", "SERVICE ID", "WITEL", "TTR CUSTOMER", "WORKLOG SUMMARY", "LAST UPDATE WORKLOG"]
         
-        # Tampilkan dataframe dengan styling
+        # Tampilkan dataframe
         st.dataframe(
             df_tabel_open[kolom_tampil],
             use_container_width=True,
             hide_index=True,
-            height=400,  # Batasi tinggi tabel agar tidak terlalu besar
+            height=400,
             column_config={
                 "NO": st.column_config.NumberColumn(
                     "NO",
@@ -474,29 +509,23 @@ with tab1:
         )
         
         # ========================================================
-        # JAVASCRIPT UNTUK HANDLE KLICK BARIS
+        # INTERAKSI KLIK BARIS (MENGGUNAKAN BUTTON UNTUK SETIAP BARIS)
         # ========================================================
-        # Kita perlu menambahkan sedikit JavaScript untuk mendeteksi klik pada baris tabel
-        # dan mengambil kalimat dari baris yang diklik
+        st.markdown("### Pilih Baris untuk Generate Kalimat:")
         
-        # Simpan data kalimat ke session state untuk diakses
-        st.session_state["kalimat_list"] = df_tabel_open["_KALIMAT"].tolist()
+        # Buat kolom-kolom kecil untuk tombol
+        cols = st.columns(5)
+        for i in range(min(20, len(df_tabel_open))):  # Tampilkan maksimal 20 tombol
+            row_idx = i
+            with cols[i % 5]:
+                btn_label = f"{df_tabel_open.iloc[row_idx]['NO']}. {df_tabel_open.iloc[row_idx]['SERVICE ID']}"
+                if st.button(btn_label, key=f"row_btn_{row_idx}"):
+                    kalimat_terpilih = df_tabel_open.iloc[row_idx]['_KALIMAT']
+                    st.session_state.selected_kalimat = kalimat_terpilih
+                    st.rerun()
         
-        # Buat selector untuk baris tabel (ini akan di-handle oleh Streamlit rerun)
-        st.markdown("""
-        <style>
-        /* Styling untuk baris tabel agar terlihat clickable */
-        .stDataFrame [data-testid="StyledDataFrameDataRow"] {
-            cursor: pointer;
-        }
-        .stDataFrame [data-testid="StyledDataFrameDataRow"]:hover {
-            background-color: rgba(128, 128, 128, 0.1);
-        }
-        </style>
-        """, unsafe_allow_html=True)
-        
-        # Tambahkan instruksi untuk user
-        st.caption("💡 Klik pada baris untuk generate kalimat")
+        # Alternatif: Instruksi untuk klik langsung (jika button terlalu banyak)
+        st.caption("💡 Klik tombol nomor di atas untuk generate kalimat, atau gunakan filter untuk mempersempit pencarian")
 
 with tab2:
     st.subheader("🔍 Tiket Close (Status Tidak Aktif)")
