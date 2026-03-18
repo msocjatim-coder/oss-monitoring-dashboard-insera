@@ -553,21 +553,91 @@ with tab1:
     st.markdown("---")
     
     # ========================================================
-    # FILTER
+    # BARIS ATAS: FILTER (KIRI) + EXPANDER AMBIL SUMMARY (KANAN)
     # ========================================================
-    col_filter1, col_filter2, col_filter3 = st.columns([1, 1, 1])
+    col_atas1, col_atas2 = st.columns([1, 1])
+    
+    with col_atas1:
+        # FILTER - TETAP SEPERTI BIASA
+        st.markdown("##### 🔎 Cari Incident")
+        cari_incident_open = st.text_input(
+            "Cari Incident",
+            placeholder="Ketik nomor INC...",
+            key="cari_open",
+            label_visibility="collapsed"
+        )
+    
+    with col_atas2:
+        # EXPANDER UNTUK AMBIL SUMMARY (BISA DILIPAT)
+        with st.expander("📋 Ambil Summary", expanded=False):
+            # Buat dictionary lookup dari df_tabel_open (data setelah filter)
+            # Perhatikan: kita menggunakan df_tabel_open yang sudah difilter
+            if 'df_tabel_open' not in locals():
+                # Jika df_tabel_open belum ada, buat dictionary kosong dulu
+                incident_dict = {}
+                st.info("Silakan tunggu data dimuat...")
+            else:
+                # Buat dictionary lookup dari data yang sudah difilter
+                incident_dict = {}
+                for idx, row in df_tabel_open.iterrows():
+                    incident_dict[row['INCIDENT']] = {
+                        'SERVICE ID': row['SERVICE ID'],
+                        'WORKLOG SUMMARY': row['WORKLOG SUMMARY']
+                    }
+            
+            # Input INCIDENT dan tombol cari dalam 1 baris
+            col_inc1, col_inc2 = st.columns([3, 1])
+            
+            with col_inc1:
+                incident_input = st.text_input(
+                    "INCIDENT",
+                    placeholder="Contoh: INC123456",
+                    key="incident_summary",
+                    label_visibility="collapsed"
+                )
+            
+            with col_inc2:
+                cari_button = st.button("🔍 Cari", use_container_width=True, key="cari_summary_btn")
+            
+            # Proses pencarian
+            if incident_input and cari_button:
+                if incident_input in incident_dict:
+                    service_id = incident_dict[incident_input]['SERVICE ID']
+                    worklog = incident_dict[incident_input]['WORKLOG SUMMARY']
+                    
+                    summary = f"{service_id}\nProgres sebelumnya : {worklog}\nMohon dibantu update progres saat ini 🙏"
+                    
+                    # Tampilkan summary dalam text area
+                    st.text_area("📝 Summary", value=summary, height=120, key="summary_area")
+                    
+                    # Tombol copy dengan JavaScript
+                    if st.button("📋 Copy Summary", use_container_width=True, key="copy_summary_btn"):
+                        st.markdown(f"""
+                        <script>
+                            navigator.clipboard.writeText(`{summary}`);
+                        </script>
+                        """, unsafe_allow_html=True)
+                        st.success("✅ Tersalin!")
+                else:
+                    st.error(f"❌ INCIDENT '{incident_input}' tidak ditemukan dalam daftar tiket open")
+            elif incident_input:
+                st.info("👆 Klik tombol 🔍 Cari untuk mengambil summary")
+            else:
+                st.info("👆 Masukkan nomor INCIDENT dan klik Cari")
+    
+    # ========================================================
+    # FILTER SEVERITY & WITEL (TETAP DI BAWAH)
+    # ========================================================
+    col_filter1, col_filter2 = st.columns([1, 1])
     
     with col_filter1:
-        cari_incident_open = st.text_input("🔎 Cari Incident", placeholder="Ketik nomor INC...", key="cari_open")
-    
-    with col_filter2:
         if "SEVERITY" in df_open.columns:
             semua_severity = sorted(df_open["SEVERITY"].unique())
             pilih_severity = st.multiselect("Filter Severity", semua_severity, default=[], key="severity_filter")
         else:
             pilih_severity = []
     
-    with col_filter3:
+    with col_filter2:
         if "WITEL" in df_open.columns:
             semua_witel = sorted(df_open["WITEL"].dropna().unique())
             pilih_witel = st.multiselect("Filter WITEL", semua_witel, default=[], key="witel_filter")
@@ -638,7 +708,6 @@ with tab1:
         )
         
         st.caption(f"Menampilkan {len(df_tabel_open)} tiket open (Status BACKEND)")
-
 with tab2:
     st.subheader("🔍 Tiket Close (Status: CLOSED / SALAMSIM)")
     
@@ -808,4 +877,5 @@ with tab3:
 st.markdown("---")
 wib_time = datetime.now(ZoneInfo("Asia/Jakarta")).strftime("%H:%M")
 st.caption(f"🔄 Auto-refresh setiap 10 detik | Data terakhir diperbarui pukul {wib_time} WIB")
+
 
