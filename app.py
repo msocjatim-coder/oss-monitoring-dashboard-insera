@@ -553,40 +553,20 @@ with tab1:
     st.markdown("---")
     
     # ========================================================
-    # BARIS ATAS: CARI INCIDENT (KIRI) & AMBIL SUMMARY (KANAN)
+    # FILTER - HANYA CARI INCIDENT
     # ========================================================
-    col_kiri, col_kanan = st.columns([1, 1])
+    col_filter1, col_filter2 = st.columns([1, 3])
     
-    with col_kiri:
-        # 🔎 Cari Incident
-        st.markdown("##### 🔎 Cari Incident")
+    with col_filter1:
         cari_incident_open = st.text_input(
-            "Cari Incident",
+            "🔎 Cari Incident",
             placeholder="Ketik nomor INC...",
             key="cari_open",
             label_visibility="collapsed"
         )
     
-    with col_kanan:
-        # 📋 Ambil Summary
-        st.markdown("##### 📋 Ambil Summary")
-        
-        # Input INCIDENT dan tombol cari dalam 1 baris
-        col_inc1, col_inc2 = st.columns([3, 1])
-        
-        with col_inc1:
-            incident_input = st.text_input(
-                "incident_input",
-                placeholder="Contoh: INC123456",
-                key="incident_summary",
-                label_visibility="collapsed"
-            )
-        
-        with col_inc2:
-            cari_button = st.button("🔍 Cari", use_container_width=True, key="cari_summary_btn")
-    
     # ========================================================
-    # FILTER DATA BERDASARKAN CARI INCIDENT
+    # FILTER DATA
     # ========================================================
     df_open_filtered = df_open.copy()
     
@@ -642,66 +622,6 @@ with tab1:
             }
         )
         
-        # ========================================================
-# AMBIL SUMMARY - SOLUSI GABUNGAN (COPY + DOWNLOAD)
-# ========================================================
-if cari_button and incident_input:
-    # Buat dictionary lookup dari df_tabel_open
-    incident_dict = {}
-    for idx, row in df_tabel_open.iterrows():
-        incident_dict[row['INCIDENT']] = {
-            'SERVICE ID': row['SERVICE ID'],
-            'WORKLOG SUMMARY': row['WORKLOG SUMMARY']
-        }
-    
-    # Tampilkan hasil pencarian
-    st.markdown("---")
-    st.markdown("##### 📋 Hasil Summary:")
-    
-    if incident_input in incident_dict:
-        service_id = incident_dict[incident_input]['SERVICE ID']
-        worklog = incident_dict[incident_input]['WORKLOG SUMMARY']
-        
-        summary = f"{service_id}\nProgres sebelumnya : {worklog}\nMohon dibantu update progres saat ini 🙏"
-        
-        # SIMPAN DI SESSION STATE
-        st.session_state['last_summary'] = summary
-        st.session_state['last_incident'] = incident_input
-        
-        # Tampilkan summary dalam text area (MUDAH COPY MANUAL)
-        st.text_area("📋 Summary (Select all and Ctrl+C)", summary, height=120, key="summary_text")
-        
-        # 3 OPSI COPY/SAVE
-        col_opt1, col_opt2, col_opt3 = st.columns(3)
-        
-        with col_opt1:
-            # Opsi 1: Petunjuk copy manual
-            st.success("📋 **Manual Copy**\n\nKlik di kotak atas, tekan **Ctrl+A**, lalu **Ctrl+C**")
-        
-        with col_opt2:
-            # Opsi 2: Download sebagai file .txt
-            st.download_button(
-                label="📥 Download .txt",
-                data=summary,
-                file_name=f"summary_{incident_input}.txt",
-                mime="text/plain",
-                use_container_width=True
-            )
-        
-        with col_opt3:
-            # Opsi 3: Download sebagai file .md
-            st.download_button(
-                label="📥 Download .md",
-                data=summary,
-                file_name=f"summary_{incident_input}.md",
-                mime="text/markdown",
-                use_container_width=True
-            )
-        
-    else:
-        st.error(f"❌ INCIDENT '{incident_input}' tidak ditemukan")
-        
-        # Tampilkan jumlah tiket
         st.caption(f"Menampilkan {len(df_tabel_open)} tiket open (Status BACKEND)")
 with tab2:
     st.subheader("🔍 Tiket Close (Status: CLOSED / SALAMSIM)")
@@ -872,6 +792,7 @@ with tab3:
 st.markdown("---")
 wib_time = datetime.now(ZoneInfo("Asia/Jakarta")).strftime("%H:%M")
 st.caption(f"🔄 Auto-refresh setiap 10 detik | Data terakhir diperbarui pukul {wib_time} WIB")
+
 
 
 
