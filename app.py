@@ -643,66 +643,63 @@ with tab1:
         )
         
         # ========================================================
-        # AMBIL SUMMARY - DITAMPILKAN SETELAH TABEL (HASIL PENCARIAN)
-        # ========================================================
-        if cari_button and incident_input:
-            # Buat dictionary lookup dari df_tabel_open
-            incident_dict = {}
-            for idx, row in df_tabel_open.iterrows():
-                incident_dict[row['INCIDENT']] = {
-                    'SERVICE ID': row['SERVICE ID'],
-                    'WORKLOG SUMMARY': row['WORKLOG SUMMARY']
-                }
-            
-            # Tampilkan hasil pencarian
-            st.markdown("---")
-            st.markdown("##### 📋 Hasil Summary:")
-            
-            if incident_input in incident_dict:
-                service_id = incident_dict[incident_input]['SERVICE ID']
-                worklog = incident_dict[incident_input]['WORKLOG SUMMARY']
-                
-                summary = f"{service_id}\nProgres sebelumnya : {worklog}\nMohon dibantu update progres saat ini 🙏"
-                
-                # SIMPAN DI SESSION STATE
-                st.session_state['last_summary'] = summary
-                st.session_state['last_incident'] = incident_input
-                
-                # Tampilkan summary dalam st.code (mudah di-copy manual)
-                st.code(summary, language="text")
-                
-                # TOMBOL COPY DENGAN 2 METODE
-                col_copy1, col_copy2 = st.columns(2)
-                
-                with col_copy1:
-                    # Metode 1: HTML Button dengan JavaScript (paling andal)
-                    html_button = f"""
-                    <button onclick="navigator.clipboard.writeText(`{summary}`).then(() => alert('✅ Summary tersalin!'))" 
-                            style="background-color: #FF4B4B; color: white; padding: 10px 0px; border: none; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px;">
-                        📋 Copy Summary (HTML)
-                    </button>
-                    """
-                    st.markdown(html_button, unsafe_allow_html=True)
-                
-                with col_copy2:
-                    # Metode 2: st.button + st.markdown dengan JavaScript (backup)
-                    if st.button("📋 Copy Summary (Streamlit)", key="copy_btn", use_container_width=True):
-                        js_code = f"""
-                        <script>
-                            navigator.clipboard.writeText(`{summary}`).then(function() {{
-                                // Optional: beri feedback visual
-                                console.log('✅ Summary tersalin!');
-                            }});
-                        </script>
-                        """
-                        st.markdown(js_code, unsafe_allow_html=True)
-                        st.success("✅ Summary tersalin!")
-                
-                # Informasi tambahan
-                st.info("💡 Klik tombol **Copy Summary (HTML)** untuk copy langsung, atau copy manual dari kotak kode di atas.")
-                
-            else:
-                st.error(f"❌ INCIDENT '{incident_input}' tidak ditemukan dalam daftar tiket open")
+# AMBIL SUMMARY - SOLUSI GABUNGAN (COPY + DOWNLOAD)
+# ========================================================
+if cari_button and incident_input:
+    # Buat dictionary lookup dari df_tabel_open
+    incident_dict = {}
+    for idx, row in df_tabel_open.iterrows():
+        incident_dict[row['INCIDENT']] = {
+            'SERVICE ID': row['SERVICE ID'],
+            'WORKLOG SUMMARY': row['WORKLOG SUMMARY']
+        }
+    
+    # Tampilkan hasil pencarian
+    st.markdown("---")
+    st.markdown("##### 📋 Hasil Summary:")
+    
+    if incident_input in incident_dict:
+        service_id = incident_dict[incident_input]['SERVICE ID']
+        worklog = incident_dict[incident_input]['WORKLOG SUMMARY']
+        
+        summary = f"{service_id}\nProgres sebelumnya : {worklog}\nMohon dibantu update progres saat ini 🙏"
+        
+        # SIMPAN DI SESSION STATE
+        st.session_state['last_summary'] = summary
+        st.session_state['last_incident'] = incident_input
+        
+        # Tampilkan summary dalam text area (MUDAH COPY MANUAL)
+        st.text_area("📋 Summary (Select all and Ctrl+C)", summary, height=120, key="summary_text")
+        
+        # 3 OPSI COPY/SAVE
+        col_opt1, col_opt2, col_opt3 = st.columns(3)
+        
+        with col_opt1:
+            # Opsi 1: Petunjuk copy manual
+            st.success("📋 **Manual Copy**\n\nKlik di kotak atas, tekan **Ctrl+A**, lalu **Ctrl+C**")
+        
+        with col_opt2:
+            # Opsi 2: Download sebagai file .txt
+            st.download_button(
+                label="📥 Download .txt",
+                data=summary,
+                file_name=f"summary_{incident_input}.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+        
+        with col_opt3:
+            # Opsi 3: Download sebagai file .md
+            st.download_button(
+                label="📥 Download .md",
+                data=summary,
+                file_name=f"summary_{incident_input}.md",
+                mime="text/markdown",
+                use_container_width=True
+            )
+        
+    else:
+        st.error(f"❌ INCIDENT '{incident_input}' tidak ditemukan")
         
         # Tampilkan jumlah tiket
         st.caption(f"Menampilkan {len(df_tabel_open)} tiket open (Status BACKEND)")
@@ -875,6 +872,7 @@ with tab3:
 st.markdown("---")
 wib_time = datetime.now(ZoneInfo("Asia/Jakarta")).strftime("%H:%M")
 st.caption(f"🔄 Auto-refresh setiap 10 detik | Data terakhir diperbarui pukul {wib_time} WIB")
+
 
 
 
